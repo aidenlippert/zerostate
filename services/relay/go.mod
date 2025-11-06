@@ -2,7 +2,10 @@ module github.com/zerostate/services/relay
 
 go 1.21
 
-replace github.com/zerostate/libs/p2p => ../../libs/p2p
+replace (
+	github.com/zerostate/libs/p2p => ../../libs/p2p
+	github.com/zerostate/libs/routing => ../../libs/routing
+)
 
 require (
 	github.com/zerostate/libs/p2p v0.0.0
