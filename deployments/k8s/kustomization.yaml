@@ -1,0 +1,22 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: zerostate
+
+resources:
+  - namespace.yaml
+  - bootnode.yaml
+  - edge-node.yaml
+  - relay.yaml
+
+commonLabels:
+  app.kubernetes.io/managed-by: kustomize
+  app.kubernetes.io/part-of: zerostate
+
+images:
+  - name: zerostate-bootnode
+    newTag: latest
+  - name: zerostate-edge-node
+    newTag: latest
+  - name: zerostate-relay
+    newTag: latest

@@ -1,0 +1,60 @@
+{
+  "@context": [
+    "https://www.w3.org/2018/credentials/v1",
+    { "zs": "https://zerostate.network/" }
+  ],
+  "id": "ipfs://bafybeigdyr234567890example",
+  "type": ["zs:AgentCard"],
+  "did": "did:key:z6MkiJxExampleAgent",
+  "keys": {
+    "signing": "did:key:z6MkiJxExampleAgent#signing",
+    "encryption": "did:key:z6MkiJxExampleAgent#encryption",
+    "postQuantum": "did:example:pqKey#dilithium3"
+  },
+  "endpoints": {
+    "libp2p": [
+      "/ip4/203.0.113.10/udp/443/quic-v1/p2p/12D3KooWRExamplePeer",
+      "/dns4/relay.zs.net/udp/443/quic-v1/p2p/12D3KooWRelayPeer"
+    ],
+    "http": ["https://api.zs.net/agents/12D3KooWRExamplePeer"],
+    "region": "us-west-1"
+  },
+  "capabilities": [
+    {
+      "name": "embeddings.hnsw.query",
+      "version": "1.0.0",
+      "cost": { "unit": "req", "price": 0.0001 },
+      "limits": { "tps": 100, "concurrency": 32 },
+      "metadata": { "model": "e5-base", "dim": 768 }
+    },
+    {
+      "name": "compute.wasm.execute",
+      "version": "1.0.0",
+      "cost": { "unit": "sec", "price": 0.002 },
+      "limits": { "tps": 10, "concurrency": 8 },
+      "metadata": { "max_mem_mb": 1024 }
+    }
+  ],
+  "embeddings": {
+    "model": "e5-base",
+    "vectors": [
+      [0.12, -0.33, 0.04, 0.18, -0.27, 0.05, 0.09, 0.01]
+    ]
+  },
+  "reputation": {
+    "score": 0.82,
+    "zkAccumulator": "acc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh"
+  },
+  "policy": {
+    "slaClass": "regional",
+    "energyBudget": "medium",
+    "privacy": "guild"
+  },
+  "proof": {
+    "type": "DataIntegrityProof",
+    "created": "2025-11-05T12:34:56Z",
+    "proofPurpose": "assertionMethod",
+    "verificationMethod": "did:key:z6MkiJxExampleAgent#signing",
+    "jws": "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9..signature"
+  }
+}

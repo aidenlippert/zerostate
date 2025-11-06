@@ -1,0 +1,35 @@
+# Code owners for zerostate monorepo
+
+# Global fallback
+* @zerostate/core-team
+
+# Architecture and planning
+/docs/architecture.md @zerostate/tech-leads
+/docs/plan/ @zerostate/tech-leads @zerostate/pm
+
+# Specifications and schemas
+/specs/ @zerostate/tech-leads @zerostate/backend
+
+# Core libraries
+/libs/p2p/ @zerostate/networking
+/libs/identity/ @zerostate/backend @zerostate/security
+/libs/protocol/ @zerostate/backend
+/libs/routing/ @zerostate/networking
+
+# Services
+/services/edge-node/ @zerostate/backend @zerostate/networking
+/services/relay/ @zerostate/networking @zerostate/sre
+/services/bootnode/ @zerostate/networking
+/services/hnsw-index/ @zerostate/search @zerostate/backend
+
+# Infrastructure and deployments
+/deployments/ @zerostate/sre
+/.github/ @zerostate/sre @zerostate/tech-leads
+/Makefile @zerostate/sre
+
+# Security
+/docs/security/ @zerostate/security
+**/Dockerfile @zerostate/sre @zerostate/security
+
+# Tests
+/tests/ @zerostate/qa @zerostate/backend

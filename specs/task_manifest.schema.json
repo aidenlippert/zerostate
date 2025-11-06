@@ -1,0 +1,102 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://zerostate.network/schemas/task_manifest.schema.json",
+  "title": "ZeroState Task Manifest",
+  "description": "Describes a requested task/job, constraints, SLA, privacy, and payment/auction parameters used to form a guild and execute work.",
+  "type": "object",
+  "properties": {
+    "manifestId": { "type": "string", "format": "uuid" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "requester": { "type": "string", "pattern": "^did:[a-z0-9]+:[A-Za-z0-9._:-]+$" },
+    "task": {
+      "type": "object",
+      "properties": {
+        "kind": { "type": "string", "enum": ["wasm", "container", "rpc"] },
+        "entry": { "type": "string", "description": "WASM module hash or container image ref or RPC method" },
+        "args": { "type": ["object", "array", "string", "null"] },
+        "inputs": {
+          "type": "array",
+          "description": "Input artifacts (hash-addressed).",
+          "items": {
+            "type": "object",
+            "properties": {
+              "uri": { "type": "string", "description": "ipfs://, https://, etc." },
+              "hash": { "type": "string" },
+              "sizeBytes": { "type": "integer", "minimum": 0 }
+            },
+            "required": ["uri"]
+          }
+        },
+        "resources": {
+          "type": "object",
+          "properties": {
+            "cpu": { "type": "number", "minimum": 0 },
+            "memoryMB": { "type": "integer", "minimum": 64 },
+            "gpu": {
+              "type": "object",
+              "properties": {
+                "count": { "type": "integer", "minimum": 0 },
+                "type": { "type": "string", "description": "e.g., NVIDIA-A100-40GB" }
+              },
+              "required": ["count"]
+            },
+            "maxRuntimeSec": { "type": "integer", "minimum": 1 }
+          }
+        }
+      },
+      "required": ["kind", "entry"]
+    },
+    "constraints": {
+      "type": "object",
+      "properties": {
+        "regions": { "type": "array", "items": { "type": "string" } },
+        "latencyMsP95": { "type": "integer", "minimum": 1 },
+        "replication": { "type": "integer", "minimum": 1, "default": 3 },
+        "energyBudget": { "type": "string" }
+      }
+    },
+    "sla": { "type": "string", "enum": ["best-effort", "regional", "backbone"], "default": "best-effort" },
+    "privacy": { "type": "string", "enum": ["public", "guild", "private"], "default": "guild" },
+    "audit": {
+      "type": "object",
+      "properties": {
+        "anchorOnChain": { "type": "boolean", "default": true },
+        "signedLogs": { "type": "boolean", "default": true }
+      }
+    },
+    "auction": {
+      "type": "object",
+      "description": "Off-chain auction parameters.",
+      "properties": {
+        "type": { "type": "string", "enum": ["vickrey", "sealed", "spot", "fixed"] },
+        "maxPrice": { "type": "number", "minimum": 0 },
+        "currency": { "type": "string", "default": "USD" },
+        "endAt": { "type": "string", "format": "date-time" },
+        "selectionPolicy": { "type": "string", "enum": ["lowest", "bestScore"] }
+      },
+      "required": ["type"]
+    },
+    "payment": {
+      "type": "object",
+      "properties": {
+        "channel": { "type": "string", "description": "State channel id or open instruction" },
+        "escrowAmount": { "type": "number", "minimum": 0 },
+        "settlementChain": { "type": "string", "description": "Chain or zone identifier" }
+      }
+    },
+    "signatures": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "signer": { "type": "string" },
+          "alg": { "type": "string" },
+          "sig": { "type": "string" }
+        },
+        "required": ["signer", "sig"]
+      }
+    }
+  },
+  "required": ["manifestId", "createdAt", "requester", "task"],
+  "additionalProperties": false
+}

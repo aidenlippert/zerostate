@@ -1,0 +1,123 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://zerostate.network/schemas/agent_card.schema.json",
+  "title": "ZeroState Agent Card",
+  "description": "Signed JSON-LD document advertising an agent's identity, capabilities, endpoints, reputation hints, and policy.",
+  "type": "object",
+  "properties": {
+    "@context": {
+      "description": "JSON-LD context for DID/VC compatibility.",
+      "oneOf": [
+        { "type": "string" },
+        { "type": "array", "items": { "type": ["string", "object"] } },
+        { "type": "object" }
+      ]
+    },
+    "id": { "type": "string", "format": "uri", "description": "Stable URI for the Agent Card (e.g., ipfs://...)." },
+    "type": {
+      "description": "JSON-LD types.",
+      "oneOf": [
+        { "type": "string" },
+        { "type": "array", "items": { "type": "string" } }
+      ]
+    },
+    "did": { "type": "string", "pattern": "^did:[a-z0-9]+:[A-Za-z0-9._:-]+$", "description": "Agent DID." },
+    "keys": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "signing": { "type": "string", "description": "Base58/Multibase public key or DID URL." },
+        "encryption": { "type": "string", "description": "Base58/Multibase public key or DID URL." },
+        "postQuantum": { "type": "string", "description": "Optional PQC key (e.g., Dilithium) or method ref." }
+      }
+    },
+    "endpoints": {
+      "type": "object",
+      "description": "Advertised addresses and transports.",
+      "properties": {
+        "libp2p": {
+          "type": "array",
+          "items": { "type": "string", "description": "Multiaddr, e.g., /ip4/203.0.113.1/udp/443/quic-v1/p2p/PeerId" }
+        },
+        "http": { "type": "array", "items": { "type": "string", "format": "uri" } },
+        "region": { "type": "string", "description": "Primary region code (RFC-5646 or provider code)." }
+      },
+      "required": ["libp2p"]
+    },
+    "capabilities": {
+      "type": "array",
+      "description": "Capabilities advertised by the agent.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string", "description": "Capability name (e.g., 'embeddings.hnsw.query')." },
+          "version": { "type": "string" },
+          "cost": {
+            "type": "object",
+            "properties": {
+              "unit": { "type": "string", "enum": ["req", "sec", "token", "gb"] },
+              "price": { "type": "number", "minimum": 0 }
+            },
+            "required": ["unit", "price"]
+          },
+          "limits": {
+            "type": "object",
+            "properties": {
+              "tps": { "type": "number", "minimum": 0 },
+              "concurrency": { "type": "integer", "minimum": 1 }
+            }
+          },
+          "metadata": { "type": "object", "additionalProperties": true }
+        },
+        "required": ["name", "version"]
+      }
+    },
+    "embeddings": {
+      "type": "object",
+      "description": "Small vector(s) for capability search (optionally cached in HNSW).",
+      "properties": {
+        "model": { "type": "string" },
+        "vectors": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": { "type": "number" },
+            "minItems": 8
+          },
+          "minItems": 1
+        }
+      }
+    },
+    "reputation": {
+      "type": "object",
+      "properties": {
+        "score": { "type": "number", "minimum": 0 },
+        "zkAccumulator": { "type": "string", "description": "Commitment to reputation set for ZK queries." }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "description": "Operational policy hints.",
+      "properties": {
+        "slaClass": { "type": "string", "enum": ["best-effort", "regional", "backbone"] },
+        "energyBudget": { "type": "string", "description": "e.g., 'low', 'medium', 'high' or Wh limit" },
+        "privacy": { "type": "string", "enum": ["public", "guild", "private"] }
+      }
+    },
+    "proof": {
+      "type": "object",
+      "description": "W3C VC Data Integrity style proof.",
+      "properties": {
+        "type": { "type": "string" },
+        "created": { "type": "string", "format": "date-time" },
+        "proofPurpose": { "type": "string" },
+        "verificationMethod": { "type": "string" },
+        "jws": { "type": "string" }
+      },
+      "required": ["type", "created", "proofPurpose", "verificationMethod", "jws"]
+    }
+  },
+  "required": ["did", "endpoints", "capabilities", "proof"],
+  "additionalProperties": false
+}

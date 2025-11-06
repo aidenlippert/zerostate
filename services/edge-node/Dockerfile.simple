@@ -1,0 +1,13 @@
+# Simple Dockerfile for edge-node - uses prebuilt binary
+FROM gcr.io/distroless/static:nonroot
+
+WORKDIR /
+
+COPY bin/edge-node /edge-node
+
+USER nonroot:nonroot
+
+EXPOSE 4002/udp
+EXPOSE 8080/tcp
+
+ENTRYPOINT ["/edge-node"]

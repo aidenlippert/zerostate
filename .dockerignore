@@ -1,0 +1,43 @@
+# Git
+.git
+.gitignore
+
+# Build artifacts (keep bin/ for simple Dockerfiles)
+# bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+coverage.out
+coverage.html
+
+# Dependencies
+vendor/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docs and configs (not needed in container)
+docs/
+examples/
+.github/
+deployments/
+
+# Test files
+*_test.go
+tests/
+
+# Development
+.env
+*.local

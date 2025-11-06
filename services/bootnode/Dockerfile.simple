@@ -1,0 +1,13 @@
+# Simple Dockerfile for bootnode - uses prebuilt binary
+FROM gcr.io/distroless/static:nonroot
+
+WORKDIR /
+
+COPY bin/bootnode /bootnode
+
+USER nonroot:nonroot
+
+EXPOSE 4001/udp
+EXPOSE 8080/tcp
+
+ENTRYPOINT ["/bootnode"]

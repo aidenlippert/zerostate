@@ -1,0 +1,43 @@
+{
+  "manifestId": "1c2b03b1-3c8b-4c6e-9a4e-0d2cbe34abcd",
+  "createdAt": "2025-11-05T12:45:00Z",
+  "requester": "did:key:z6MkwReqExample",
+  "task": {
+    "kind": "wasm",
+    "entry": "ipfs://bafybeiwasmapphash/module.wasm",
+    "args": { "prompt": "summarize: hybrid p2p design" },
+    "inputs": [
+      { "uri": "ipfs://bafybeidataset1", "hash": "sha256-abc...", "sizeBytes": 1048576 }
+    ],
+    "resources": {
+      "cpu": 2,
+      "memoryMB": 1024,
+      "gpu": { "count": 0 },
+      "maxRuntimeSec": 120
+    }
+  },
+  "constraints": {
+    "regions": ["us-west-1", "us-central-1"],
+    "latencyMsP95": 300,
+    "replication": 3,
+    "energyBudget": "medium"
+  },
+  "sla": "regional",
+  "privacy": "guild",
+  "audit": { "anchorOnChain": true, "signedLogs": true },
+  "auction": {
+    "type": "sealed",
+    "maxPrice": 0.05,
+    "currency": "USD",
+    "endAt": "2025-11-05T12:50:00Z",
+    "selectionPolicy": "bestScore"
+  },
+  "payment": {
+    "channel": "chan-0xabc123",
+    "escrowAmount": 1.0,
+    "settlementChain": "zs-cosmos-testnet"
+  },
+  "signatures": [
+    { "signer": "did:key:z6MkwReqExample#signing", "alg": "Ed25519", "sig": "base64sig==" }
+  ]
+}

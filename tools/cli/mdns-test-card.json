@@ -1,0 +1,25 @@
+{
+  "did": "did:key:z4NTMrpTCg1qAa9vTWkcbZBkdsCLTuWRbxpoTQbPpfL3h",
+  "endpoints": {
+    "libp2p": [
+      "/ip4/127.0.0.1/tcp/4001/p2p/did:key:z4NTMrpTCg1qAa9vTWkcbZBkdsCLTuWRbxpoTQbPpfL3h"
+    ]
+  },
+  "capabilities": [
+    {
+      "name": "text-generation",
+      "version": "1.0"
+    },
+    {
+      "name": "image-analysis",
+      "version": "1.0"
+    }
+  ],
+  "proof": {
+    "type": "Ed25519Signature2020",
+    "created": "2025-11-06T19:43:02Z",
+    "proofPurpose": "assertionMethod",
+    "verificationMethod": "did:key:z4NTMrpTCg1qAa9vTWkcbZBkdsCLTuWRbxpoTQbPpfL3h#signing",
+    "jws": "Q6NyZnE0lTnUTyTr8r7YKNVyasQNndvSx4XcopK4aZLc2_Pn0KaWT5zTSabbQx3eyjLwyyixAEeyHebVF6WUBQ"
+  }
+}

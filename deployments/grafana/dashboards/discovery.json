@@ -1,0 +1,136 @@
+{
+  "dashboard": {
+    "id": null,
+    "uid": "zerostate-discovery",
+    "title": "Zerostate Discovery & DHT Performance",
+    "tags": ["zerostate", "discovery", "dht", "p2p"],
+    "timezone": "browser",
+    "schemaVersion": 16,
+    "version": 1,
+    "refresh": "10s",
+    "time": {
+      "from": "now-15m",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Peer Connections",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "zerostate_peer_connections",
+            "legendFormat": "{{instance}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Connections"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 2,
+        "title": "DHT Lookup Rate (req/s)",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(zerostate_dht_lookups_total[1m])",
+            "legendFormat": "{{operation}} - {{status}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "reqps", "label": "Requests/s"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 3,
+        "title": "DHT Lookup Latency (P95)",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(zerostate_dht_lookup_duration_seconds_bucket[5m]))",
+            "legendFormat": "{{operation}} P95",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.50, rate(zerostate_dht_lookup_duration_seconds_bucket[5m]))",
+            "legendFormat": "{{operation}} P50",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          {"format": "s", "label": "Latency"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 4,
+        "title": "DHT Error Rate",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(zerostate_dht_lookups_total{status=\"error\"}[1m])",
+            "legendFormat": "{{operation}} errors",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "reqps", "label": "Errors/s"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Agent Card Operations",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 16, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(zerostate_agent_card_publish_total[1m])",
+            "legendFormat": "Publish rate",
+            "refId": "A"
+          },
+          {
+            "expr": "zerostate_agent_card_publish_total",
+            "legendFormat": "Total published",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Count"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 6,
+        "title": "DHT Success vs Error Ratio",
+        "type": "piechart",
+        "gridPos": {"x": 12, "y": 16, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(increase(zerostate_dht_lookups_total{status=\"success\"}[5m]))",
+            "legendFormat": "Success",
+            "refId": "A"
+          },
+          {
+            "expr": "sum(increase(zerostate_dht_lookups_total{status=\"error\"}[5m]))",
+            "legendFormat": "Error",
+            "refId": "B"
+          },
+          {
+            "expr": "sum(increase(zerostate_dht_lookups_total{status=\"not_found\"}[5m]))",
+            "legendFormat": "Not Found",
+            "refId": "C"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,15 @@
+go 1.21
+
+use (
+	./libs/identity
+	./libs/p2p
+	./libs/routing
+	./libs/search
+	./libs/telemetry
+	./services/bootnode
+	./services/edge-node
+	./services/relay
+	./tests/e2e
+	./tests/integration
+	./tools/cli
+)

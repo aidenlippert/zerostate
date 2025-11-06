@@ -1,0 +1,13 @@
+# Simple Dockerfile for relay - uses prebuilt binary
+FROM gcr.io/distroless/static:nonroot
+
+WORKDIR /
+
+COPY bin/relay /relay
+
+USER nonroot:nonroot
+
+EXPOSE 4004/udp
+EXPOSE 8080/tcp
+
+ENTRYPOINT ["/relay"]

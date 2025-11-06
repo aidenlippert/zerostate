@@ -1,0 +1,105 @@
+version: '3.8'
+
+services:
+  # Jaeger for distributed tracing
+  jaeger:
+    image: jaegertracing/all-in-one:1.51
+    container_name: zs-jaeger
+    ports:
+      - "16686:16686"  # Jaeger UI
+      - "14268:14268"  # Collector HTTP
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    networks:
+      - zerostate
+
+  # Bootstrap node
+  bootnode:
+    image: zerostate-bootnode:latest
+    container_name: zs-bootnode
+    ports:
+      - "4001:4001/udp"
+      - "8081:8080/tcp"
+    environment:
+      - ZEROSTATE_LISTEN=/ip4/0.0.0.0/udp/4001/quic-v1
+    networks:
+      - zerostate
+
+  # Edge node 1
+  edge-node-1:
+    image: zerostate-edge-node:latest
+    container_name: zs-edge-1
+    depends_on:
+      - bootnode
+      - jaeger
+    ports:
+      - "4002:4002/udp"
+      - "8082:8080/tcp"
+    environment:
+      - ZEROSTATE_LISTEN=/ip4/0.0.0.0/udp/4002/quic-v1
+      - ZEROSTATE_BOOTSTRAP=${ZEROSTATE_BOOTSTRAP_1:-/dns4/bootnode/udp/4001/quic-v1/p2p/12D3KooWMn1TSCsei6ExHs6Kd69odyEA2MqFbRNeCWScQHbPAiYt}
+      - ZEROSTATE_ENABLE_MDNS=true
+      - ZEROSTATE_ENABLE_TELEMETRY=true
+      - ZEROSTATE_JAEGER_ENDPOINT=http://jaeger:14268/api/traces
+    networks:
+      - zerostate
+
+  # Edge node 2
+  edge-node-2:
+    image: zerostate-edge-node:latest
+    container_name: zs-edge-2
+    depends_on:
+      - bootnode
+      - jaeger
+    ports:
+      - "4003:4003/udp"
+      - "8083:8080/tcp"
+    environment:
+      - ZEROSTATE_LISTEN=/ip4/0.0.0.0/udp/4003/quic-v1
+      - ZEROSTATE_BOOTSTRAP=${ZEROSTATE_BOOTSTRAP_2:-/dns4/bootnode/udp/4001/quic-v1/p2p/12D3KooWMn1TSCsei6ExHs6Kd69odyEA2MqFbRNeCWScQHbPAiYt}
+      - ZEROSTATE_ENABLE_MDNS=true
+      - ZEROSTATE_ENABLE_TELEMETRY=true
+      - ZEROSTATE_JAEGER_ENDPOINT=http://jaeger:14268/api/traces
+    networks:
+      - zerostate
+
+  # Prometheus
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: zs-prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus-simple.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    networks:
+      - zerostate
+
+  # Grafana
+  grafana:
+    image: grafana/grafana:10.2.2
+    container_name: zs-grafana
+    depends_on:
+      - prometheus
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/etc/grafana/dashboards
+      - grafana-data:/var/lib/grafana
+    networks:
+      - zerostate
+
+networks:
+  zerostate:
+    driver: bridge
+
+volumes:
+  prometheus-data:
+  grafana-data:

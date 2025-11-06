@@ -1,0 +1,140 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: relay-config
+  namespace: zerostate
+data:
+  ZEROSTATE_LISTEN: "/ip4/0.0.0.0/udp/4003/quic-v1"
+  ZEROSTATE_LOG_LEVEL: "info"
+  ZEROSTATE_ENABLE_TELEMETRY: "true"
+  ZEROSTATE_JAEGER_ENDPOINT: "http://jaeger-collector.observability.svc.cluster.local:14268/api/traces"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: relay
+  namespace: zerostate
+  labels:
+    app: relay
+    app.kubernetes.io/name: relay
+    app.kubernetes.io/component: relay
+spec:
+  type: LoadBalancer
+  ports:
+    - name: p2p
+      port: 4003
+      targetPort: 4003
+      protocol: UDP
+    - name: http
+      port: 8080
+      targetPort: 8080
+      protocol: TCP
+  selector:
+    app: relay
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: relay
+  namespace: zerostate
+  labels:
+    app: relay
+    app.kubernetes.io/name: relay
+    app.kubernetes.io/component: relay
+    app.kubernetes.io/version: "v0.1.0"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: relay
+  template:
+    metadata:
+      labels:
+        app: relay
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      initContainers:
+        - name: fetch-bootstrap-peer
+          image: curlimages/curl:latest
+          command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Waiting for bootnode service..."
+              until curl -sf http://bootnode.zerostate.svc.cluster.local:8080/healthz > /dev/null 2>&1; do
+                echo "Bootnode not ready, waiting..."
+                sleep 2
+              done
+              
+              echo "Fetching bootnode peer ID..."
+              PEER_ID=$(curl -sf http://bootnode.zerostate.svc.cluster.local:8080/peer-id)
+              
+              if [ -z "$PEER_ID" ]; then
+                echo "ERROR: Failed to fetch peer ID"
+                exit 1
+              fi
+              
+              echo "Bootnode Peer ID: $PEER_ID"
+              BOOTSTRAP_ADDR="/dns4/bootnode.zerostate.svc.cluster.local/udp/4001/quic-v1/p2p/${PEER_ID}"
+              echo "$BOOTSTRAP_ADDR" > /etc/zerostate/bootstrap-peer
+              echo "Bootstrap address written to /etc/zerostate/bootstrap-peer"
+          volumeMounts:
+            - name: bootstrap-config
+              mountPath: /etc/zerostate
+      containers:
+        - name: relay
+          image: zerostate-relay:latest
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - -c
+            - |
+              if [ -f /etc/zerostate/bootstrap-peer ]; then
+                export ZEROSTATE_BOOTSTRAP=$(cat /etc/zerostate/bootstrap-peer)
+                echo "Using dynamic bootstrap: $ZEROSTATE_BOOTSTRAP"
+              else
+                echo "WARNING: No bootstrap peer file found, using fallback"
+                export ZEROSTATE_BOOTSTRAP="/dns4/bootnode.zerostate.svc.cluster.local/udp/4001/quic-v1/p2p/12D3KooWMn1TSCsei6ExHs6Kd69odyEA2MqFbRNeCWScQHbPAiYt"
+              fi
+              exec /relay run
+          envFrom:
+            - configMapRef:
+                name: relay-config
+          volumeMounts:
+            - name: bootstrap-config
+              mountPath: /etc/zerostate
+              readOnly: true
+          ports:
+            - name: p2p
+              containerPort: 4003
+              protocol: UDP
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          resources:
+            requests:
+              cpu: 150m
+              memory: 192Mi
+            limits:
+              cpu: 750m
+              memory: 768Mi
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 12
+            periodSeconds: 30
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 8
+            periodSeconds: 10
+            timeoutSeconds: 3
+      volumes:
+        - name: bootstrap-config
+          emptyDir: {}

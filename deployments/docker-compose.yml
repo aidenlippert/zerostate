@@ -1,0 +1,126 @@
+version: '3.8'
+
+services:
+  # Bootstrap node
+  bootnode:
+    image: zerostate-bootnode:latest
+    container_name: zs-bootnode
+    ports:
+      - "4001:4001/udp"
+      - "8080:8080/tcp"
+    environment:
+      - ZEROSTATE_LOG_LEVEL=info
+      - ZEROSTATE_LISTEN=/ip4/0.0.0.0/udp/4001/quic-v1
+    networks:
+      - zerostate
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:8080/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Edge node 1
+  edge-node-1:
+    image: zerostate-edge-node:latest
+    container_name: zs-edge-1
+    depends_on:
+      - bootnode
+    environment:
+      - ZEROSTATE_LOG_LEVEL=debug
+      - ZEROSTATE_LISTEN=/ip4/0.0.0.0/udp/4002/quic-v1
+      - ZEROSTATE_BOOTSTRAP=/dns4/bootnode/udp/4001/quic-v1/p2p/${BOOTNODE_PEER_ID:-12D3KooWBootstrap}
+    networks:
+      - zerostate
+
+  # Edge node 2
+  edge-node-2:
+    image: zerostate-edge-node:latest
+    container_name: zs-edge-2
+    depends_on:
+      - bootnode
+    environment:
+      - ZEROSTATE_LOG_LEVEL=debug
+      - ZEROSTATE_LISTEN=/ip4/0.0.0.0/udp/4003/quic-v1
+      - ZEROSTATE_BOOTSTRAP=/dns4/bootnode/udp/4001/quic-v1/p2p/${BOOTNODE_PEER_ID:-12D3KooWBootstrap}
+    networks:
+      - zerostate
+
+  # Relay (placeholder)
+  relay:
+    image: zerostate-relay:latest
+    container_name: zs-relay
+    depends_on:
+      - bootnode
+    environment:
+      - ZEROSTATE_LOG_LEVEL=info
+      - ZEROSTATE_LISTEN=/ip4/0.0.0.0/udp/4004/quic-v1
+      - ZEROSTATE_BOOTSTRAP=/dns4/bootnode/udp/4001/quic-v1/p2p/${BOOTNODE_PEER_ID:-12D3KooWBootstrap}
+    networks:
+      - zerostate
+
+  # OpenTelemetry Collector
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.91.0
+    container_name: zs-otel-collector
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
+    ports:
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+      - "8888:8888"   # Prometheus metrics
+    networks:
+      - zerostate
+
+  # Prometheus
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: zs-prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - zerostate
+
+  # Grafana
+  grafana:
+    image: grafana/grafana:10.2.2
+    container_name: zs-grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    networks:
+      - zerostate
+
+  # Jaeger (all-in-one)
+  jaeger:
+    image: jaegertracing/all-in-one:1.52
+    container_name: zs-jaeger
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    ports:
+      - "16686:16686"  # Jaeger UI
+      - "14250:14250"  # gRPC
+    networks:
+      - zerostate
+
+networks:
+  zerostate:
+    driver: bridge
+
+volumes:
+  prometheus-data:
+  grafana-data:
