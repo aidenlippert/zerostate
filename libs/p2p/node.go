@@ -52,6 +52,7 @@ type Node struct {
 	dht        *dht.IpfsDHT
 	qtable     *routing.QTable
 	protocol   *ProtocolNegotiator
+	flowCtrl   *FlowController
 	config     *Config
 	logger     *zap.Logger
 	tracer     trace.Tracer
@@ -95,6 +96,9 @@ func NewNode(ctx context.Context, cfg *Config) (*Node, error) {
 		return nil, fmt.Errorf("failed to create protocol negotiator: %w", err)
 	}
 
+	// Initialize flow controller
+	flowCtrl := NewFlowController(DefaultFlowControlConfig(), cfg.Logger)
+
 	node := &Node{
 		host:     h,
 		config:   cfg,
@@ -102,6 +106,7 @@ func NewNode(ctx context.Context, cfg *Config) (*Node, error) {
 		tracer:   tracer,
 		qtable:   routing.NewQTable(),
 		protocol: protocol,
+		flowCtrl: flowCtrl,
 	}
 
 	cfg.Logger.Info("libp2p host created",
@@ -231,9 +236,12 @@ func (n *Node) Host() host.Host {
 	return n.host
 }
 
-// Close shuts down the node
+// Close stops the P2P node
 func (n *Node) Close() error {
 	n.logger.Info("shutting down node")
+	if n.flowCtrl != nil {
+		n.flowCtrl.Close()
+	}
 	if n.dht != nil {
 		if err := n.dht.Close(); err != nil {
 			n.logger.Error("error closing DHT", zap.Error(err))
@@ -271,6 +279,11 @@ func (n *Node) WaitForPeers(ctx context.Context, minPeers int, timeout time.Dura
 // Protocol returns the protocol negotiator
 func (n *Node) Protocol() *ProtocolNegotiator {
 	return n.protocol
+}
+
+// FlowControl returns the flow controller
+func (n *Node) FlowControl() *FlowController {
+	return n.flowCtrl
 }
 
 // multiaddrsToStrings converts multiaddrs to strings
