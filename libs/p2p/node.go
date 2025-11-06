@@ -53,6 +53,7 @@ type Node struct {
 	qtable     *routing.QTable
 	protocol   *ProtocolNegotiator
 	flowCtrl   *FlowController
+	gossip     *GossipService
 	config     *Config
 	logger     *zap.Logger
 	tracer     trace.Tracer
@@ -99,6 +100,14 @@ func NewNode(ctx context.Context, cfg *Config) (*Node, error) {
 	// Initialize flow controller
 	flowCtrl := NewFlowController(DefaultFlowControlConfig(), cfg.Logger)
 
+	// Initialize gossip service
+	gossip, err := NewGossipService(ctx, h, cfg.Logger)
+	if err != nil {
+		h.Close()
+		flowCtrl.Close()
+		return nil, fmt.Errorf("failed to create gossip service: %w", err)
+	}
+
 	node := &Node{
 		host:     h,
 		config:   cfg,
@@ -107,6 +116,7 @@ func NewNode(ctx context.Context, cfg *Config) (*Node, error) {
 		qtable:   routing.NewQTable(),
 		protocol: protocol,
 		flowCtrl: flowCtrl,
+		gossip:   gossip,
 	}
 
 	cfg.Logger.Info("libp2p host created",
@@ -239,6 +249,11 @@ func (n *Node) Host() host.Host {
 // Close stops the P2P node
 func (n *Node) Close() error {
 	n.logger.Info("shutting down node")
+	if n.gossip != nil {
+		if err := n.gossip.Close(); err != nil {
+			n.logger.Error("error closing gossip service", zap.Error(err))
+		}
+	}
 	if n.flowCtrl != nil {
 		n.flowCtrl.Close()
 	}
@@ -284,6 +299,11 @@ func (n *Node) Protocol() *ProtocolNegotiator {
 // FlowControl returns the flow controller
 func (n *Node) FlowControl() *FlowController {
 	return n.flowCtrl
+}
+
+// Gossip returns the gossip service
+func (n *Node) Gossip() *GossipService {
+	return n.gossip
 }
 
 // multiaddrsToStrings converts multiaddrs to strings
