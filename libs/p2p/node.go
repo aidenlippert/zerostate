@@ -48,12 +48,13 @@ type Config struct {
 
 // Node represents a zerostate P2P node
 type Node struct {
-	host   host.Host
-	dht    *dht.IpfsDHT
-	qtable *routing.QTable
-	config *Config
-	logger *zap.Logger
-	tracer trace.Tracer
+	host       host.Host
+	dht        *dht.IpfsDHT
+	qtable     *routing.QTable
+	protocol   *ProtocolNegotiator
+	config     *Config
+	logger     *zap.Logger
+	tracer     trace.Tracer
 }
 
 // NewNode creates and initializes a new P2P node
@@ -87,12 +88,20 @@ func NewNode(ctx context.Context, cfg *Config) (*Node, error) {
 		return nil, fmt.Errorf("failed to create libp2p host: %w", err)
 	}
 
+	// Initialize protocol negotiator
+	protocol, err := NewProtocolNegotiator(cfg.Logger)
+	if err != nil {
+		h.Close()
+		return nil, fmt.Errorf("failed to create protocol negotiator: %w", err)
+	}
+
 	node := &Node{
-		host:   h,
-		config: cfg,
-		logger: cfg.Logger,
-		tracer: tracer,
-		qtable: routing.NewQTable(),
+		host:     h,
+		config:   cfg,
+		logger:   cfg.Logger,
+		tracer:   tracer,
+		qtable:   routing.NewQTable(),
+		protocol: protocol,
 	}
 
 	cfg.Logger.Info("libp2p host created",
@@ -257,6 +266,11 @@ func (n *Node) WaitForPeers(ctx context.Context, minPeers int, timeout time.Dura
 			}
 		}
 	}
+}
+
+// Protocol returns the protocol negotiator
+func (n *Node) Protocol() *ProtocolNegotiator {
+	return n.protocol
 }
 
 // multiaddrsToStrings converts multiaddrs to strings
