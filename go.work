@@ -7,6 +7,7 @@ use (
 	./libs/guild
 	./libs/identity
 	./libs/p2p
+	./libs/payment
 	./libs/routing
 	./libs/search
 	./libs/telemetry
