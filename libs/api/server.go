@@ -171,6 +171,13 @@ func (s *Server) setupRoutes() {
 			tasks.GET("/:id/result", s.handlers.GetTaskResult)
 		}
 
+		// Orchestrator monitoring
+		orchestrator := v1.Group("/orchestrator")
+		{
+			orchestrator.GET("/metrics", s.handlers.GetOrchestratorMetrics)
+			orchestrator.GET("/health", s.handlers.GetOrchestratorHealth)
+		}
+
 		// User management (future)
 		users := v1.Group("/users")
 		{

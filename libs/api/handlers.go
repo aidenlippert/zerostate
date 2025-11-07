@@ -13,14 +13,14 @@ import (
 // Handlers holds all API request handlers and their dependencies
 type Handlers struct {
 	// Core dependencies
-	logger    *zap.Logger
-	host      host.Host
-	signer    *identity.Signer
-	hnsw      *search.HNSWIndex
-	taskQueue *orchestration.TaskQueue
+	logger       *zap.Logger
+	host         host.Host
+	signer       *identity.Signer
+	hnsw         *search.HNSWIndex
+	taskQueue    *orchestration.TaskQueue
+	orchestrator *orchestration.Orchestrator
 
 	// Services (to be added)
-	// orchestrator   *orchestration.Orchestrator
 	// userManager    *auth.UserManager
 	// paymentService *payment.Service
 
@@ -35,18 +35,20 @@ func NewHandlers(
 	signer *identity.Signer,
 	hnsw *search.HNSWIndex,
 	taskQueue *orchestration.TaskQueue,
+	orchestrator *orchestration.Orchestrator,
 ) *Handlers {
 	if logger == nil {
 		logger = zap.NewNop()
 	}
 
 	return &Handlers{
-		logger:    logger,
-		host:      host,
-		signer:    signer,
-		hnsw:      hnsw,
-		taskQueue: taskQueue,
-		ctx:       ctx,
+		logger:       logger,
+		host:         host,
+		signer:       signer,
+		hnsw:         hnsw,
+		taskQueue:    taskQueue,
+		orchestrator: orchestrator,
+		ctx:          ctx,
 	}
 }
 

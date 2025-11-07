@@ -40,8 +40,17 @@ func TestTaskSubmissionWorkflow(t *testing.T) {
 	taskQueue := orchestration.NewTaskQueue(ctx, 100, logger)
 	defer taskQueue.Close()
 
+	// Create agent selector and executor
+	selector := orchestration.NewHNSWAgentSelector(hnsw, logger)
+	executor := orchestration.NewMockTaskExecutor(logger)
+
+	// Create orchestrator
+	orchConfig := orchestration.DefaultOrchestratorConfig()
+	orchConfig.NumWorkers = 2
+	orch := orchestration.NewOrchestrator(ctx, taskQueue, selector, executor, orchConfig, logger)
+
 	// Create handlers
-	handlers := api.NewHandlers(ctx, logger, host, signer, hnsw, taskQueue)
+	handlers := api.NewHandlers(ctx, logger, host, signer, hnsw, taskQueue, orch)
 
 	// Create server
 	config := api.DefaultConfig()
