@@ -55,6 +55,7 @@ type Node struct {
 	flowCtrl        *FlowController
 	gossip          *GossipService
 	providerRefresh *ProviderRefresher
+	connPool        *ConnectionPool
 	config          *Config
 	logger          *zap.Logger
 	tracer          trace.Tracer
@@ -109,6 +110,9 @@ func NewNode(ctx context.Context, cfg *Config) (*Node, error) {
 		return nil, fmt.Errorf("failed to create gossip service: %w", err)
 	}
 
+	// Initialize connection pool
+	connPool := NewConnectionPool(ctx, h, nil, cfg.Logger)
+
 	node := &Node{
 		host:     h,
 		config:   cfg,
@@ -118,6 +122,7 @@ func NewNode(ctx context.Context, cfg *Config) (*Node, error) {
 		protocol: protocol,
 		flowCtrl: flowCtrl,
 		gossip:   gossip,
+		connPool: connPool,
 	}
 
 	cfg.Logger.Info("libp2p host created",
@@ -254,6 +259,11 @@ func (n *Node) Host() host.Host {
 // Close stops the P2P node
 func (n *Node) Close() error {
 	n.logger.Info("shutting down node")
+	if n.connPool != nil {
+		if err := n.connPool.Close(); err != nil {
+			n.logger.Error("error closing connection pool", zap.Error(err))
+		}
+	}
 	if n.providerRefresh != nil {
 		if err := n.providerRefresh.Close(); err != nil {
 			n.logger.Error("error closing provider refresh", zap.Error(err))
@@ -319,6 +329,11 @@ func (n *Node) Gossip() *GossipService {
 // ProviderRefresh returns the provider refresher
 func (n *Node) ProviderRefresh() *ProviderRefresher {
 	return n.providerRefresh
+}
+
+// ConnectionPool returns the connection pool
+func (n *Node) ConnectionPool() *ConnectionPool {
+	return n.connPool
 }
 
 // multiaddrsToStrings converts multiaddrs to strings
