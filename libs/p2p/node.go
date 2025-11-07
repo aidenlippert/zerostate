@@ -58,6 +58,7 @@ type Node struct {
 	connPool        *ConnectionPool
 	healthMonitor   *HealthMonitor
 	requestDedup    *RequestDeduplicator
+	bandwidthQoS    *BandwidthQoS
 	config          *Config
 	logger          *zap.Logger
 	tracer          trace.Tracer
@@ -130,6 +131,7 @@ func NewNode(ctx context.Context, cfg *Config) (*Node, error) {
 		connPool:      connPool,
 		healthMonitor: healthMonitor,
 		requestDedup:  NewRequestDeduplicator(ctx, nil, cfg.Logger),
+		bandwidthQoS:  NewBandwidthQoS(ctx, nil, cfg.Logger),
 	}
 
 	cfg.Logger.Info("libp2p host created",
@@ -271,6 +273,11 @@ func (n *Node) Close() error {
 			n.logger.Error("error closing health monitor", zap.Error(err))
 		}
 	}
+	if n.bandwidthQoS != nil {
+		if err := n.bandwidthQoS.Close(); err != nil {
+			n.logger.Error("error closing bandwidth QoS", zap.Error(err))
+		}
+	}
 	if n.requestDedup != nil {
 		if err := n.requestDedup.Close(); err != nil {
 			n.logger.Error("error closing request deduplicator", zap.Error(err))
@@ -361,6 +368,11 @@ func (n *Node) HealthMonitor() *HealthMonitor {
 // RequestDedup returns the request deduplicator
 func (n *Node) RequestDedup() *RequestDeduplicator {
 	return n.requestDedup
+}
+
+// BandwidthQoS returns the bandwidth QoS manager
+func (n *Node) BandwidthQoS() *BandwidthQoS {
+	return n.bandwidthQoS
 }
 
 // multiaddrsToStrings converts multiaddrs to strings
