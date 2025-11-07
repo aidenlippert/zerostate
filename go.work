@@ -3,6 +3,7 @@ go 1.24
 toolchain go1.24.10
 
 use (
+	./libs/execution
 	./libs/guild
 	./libs/identity
 	./libs/p2p
