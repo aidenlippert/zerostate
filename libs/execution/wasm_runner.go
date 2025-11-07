@@ -113,7 +113,7 @@ type WASMRunner struct {
 	runtime wazero.Runtime
 	config  *ExecutionConfig
 	logger  *zap.Logger
-	mu      sync.Mutex
+	mu      sync.Mutex // Protects concurrent access to runtime
 }
 
 // NewWASMRunner creates a new WASM runner
@@ -168,8 +168,11 @@ func (wr *WASMRunner) Execute(ctx context.Context, wasmBytes []byte, functionNam
 	execCtx, cancel := context.WithTimeout(ctx, wr.config.MaxExecutionTime)
 	defer cancel()
 
-	// Compile module
+	// Compile module (protected by mutex for thread-safety)
+	wr.mu.Lock()
 	compiledModule, err := wr.runtime.CompileModule(execCtx, wasmBytes)
+	wr.mu.Unlock()
+	
 	if err != nil {
 		result.Error = fmt.Errorf("%w: %v", ErrInvalidModule, err)
 		result.EndTime = time.Now()
@@ -185,9 +188,12 @@ func (wr *WASMRunner) Execute(ctx context.Context, wasmBytes []byte, functionNam
 		WithStdout(stdout).
 		WithStderr(stderr)
 
-	// Instantiate module
+	// Instantiate module (protected by mutex)
+	wr.mu.Lock()
 	module, err := wr.runtime.InstantiateModule(execCtx, compiledModule, moduleConfig)
-	if err != nil {
+	wr.mu.Unlock()
+	
+	if err != nil{
 		result.Error = fmt.Errorf("%w: %v", ErrExecutionFailed, err)
 		result.EndTime = time.Now()
 		result.Duration = result.EndTime.Sub(start)
@@ -281,8 +287,11 @@ func (wr *WASMRunner) ExecuteWithArgs(ctx context.Context, wasmBytes []byte, arg
 	execCtx, cancel := context.WithTimeout(ctx, wr.config.MaxExecutionTime)
 	defer cancel()
 
-	// Compile module
+	// Compile module (protected by mutex for thread-safety)
+	wr.mu.Lock()
 	compiledModule, err := wr.runtime.CompileModule(execCtx, wasmBytes)
+	wr.mu.Unlock()
+	
 	if err != nil {
 		result.Error = fmt.Errorf("%w: %v", ErrInvalidModule, err)
 		result.EndTime = time.Now()
@@ -308,8 +317,11 @@ func (wr *WASMRunner) ExecuteWithArgs(ctx context.Context, wasmBytes []byte, arg
 		moduleConfig = moduleConfig.WithStderr(stderr)
 	}
 
-	// Instantiate and execute
+	// Instantiate and execute (protected by mutex)
+	wr.mu.Lock()
 	module, err := wr.runtime.InstantiateModule(execCtx, compiledModule, moduleConfig)
+	wr.mu.Unlock()
+	
 	if err != nil {
 		result.Error = fmt.Errorf("%w: %v", ErrExecutionFailed, err)
 		result.EndTime = time.Now()
