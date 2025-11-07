@@ -1,0 +1,245 @@
+# CODEOWNERS - Automatic PR reviewer assignment
+#
+# This file defines code ownership for automatic reviewer assignment.
+# When a PR is created, GitHub automatically requests reviews from the
+# owners of the modified files.
+#
+# Syntax: <file-pattern> @github-username1 @github-username2
+#
+# Documentation: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# =============================================================================
+# Global Owners (default reviewers for everything)
+# =============================================================================
+# Uncomment and add team members:
+# * @tech-lead @senior-engineer
+
+# =============================================================================
+# Core Infrastructure
+# =============================================================================
+
+# P2P Networking Layer
+/libs/p2p/                          @networking-team
+/libs/discovery/                    @networking-team
+
+# Execution Layer
+/libs/execution/                    @execution-team
+/libs/guild/                        @execution-team
+/libs/wasm/                         @execution-team
+
+# Economic Layer
+/libs/economic/                     @economic-team
+/libs/payment/                      @economic-team
+/libs/reputation/                   @economic-team
+
+# =============================================================================
+# Application Layer (Sprint 7 - TO BE BUILT)
+# =============================================================================
+
+# API Layer
+/libs/api/                          @backend-team @api-specialists
+/cmd/api-server/                    @backend-team
+
+# Orchestration
+/libs/orchestration/                @backend-team @architect
+/libs/meta-agent/                   @backend-team
+
+# Authentication & Security
+/libs/auth/                         @security-team @backend-team
+/libs/security/                     @security-team
+
+# Database
+/libs/db/                           @backend-team @database-specialists
+/migrations/                        @backend-team @database-specialists
+
+# Web UI
+/web/                               @frontend-team
+/web/src/components/                @frontend-team
+/web/src/api/                       @frontend-team @backend-team
+
+# =============================================================================
+# Infrastructure & Deployment
+# =============================================================================
+
+# Docker & Kubernetes
+/deployments/                       @devops-team @sre-team
+/deployments/k8s/                   @devops-team @sre-team
+/Dockerfile                         @devops-team
+/docker-compose.yml                 @devops-team
+
+# Terraform & Infrastructure as Code
+/terraform/                         @devops-team @infrastructure-team
+/deployments/terraform/             @devops-team @infrastructure-team
+
+# CI/CD
+/.github/workflows/                 @devops-team @tech-lead
+/.github/actions/                   @devops-team
+
+# =============================================================================
+# Observability
+# =============================================================================
+
+# Metrics & Monitoring
+/libs/metrics/                      @sre-team @observability-team
+/libs/telemetry/                    @sre-team @observability-team
+/deployments/grafana/               @sre-team @observability-team
+/deployments/prometheus*.yml        @sre-team @observability-team
+
+# Health Checks
+/libs/health/                       @sre-team @backend-team
+
+# Logging
+/deployments/loki*.yaml             @sre-team @observability-team
+/deployments/promtail*.yaml         @sre-team @observability-team
+
+# =============================================================================
+# Testing
+# =============================================================================
+
+# Integration Tests
+/tests/integration/                 @qa-team @backend-team
+
+# E2E Tests
+/tests/e2e/                         @qa-team @frontend-team
+
+# Chaos Engineering
+/tests/chaos/                       @sre-team @qa-team
+
+# Load & Performance Tests
+/tests/load/                        @performance-team @qa-team
+/tests/benchmark/                   @performance-team
+
+# =============================================================================
+# Documentation
+# =============================================================================
+
+# General Documentation
+/docs/                              @tech-lead @documentation-team
+/README*.md                         @tech-lead @documentation-team
+/CONTRIBUTING.md                    @tech-lead @community-manager
+
+# API Documentation
+/docs/api/                          @backend-team @api-specialists @documentation-team
+
+# Architecture Documentation
+/docs/architecture/                 @architect @tech-lead
+/docs/adr/                          @architect @tech-lead
+
+# Guides & Tutorials
+/docs/guides/                       @documentation-team @mentor-team
+/docs/tutorials/                    @documentation-team @mentor-team
+
+# Sprint Documentation
+/docs/SPRINT*.md                    @tech-lead @pm-tpm
+
+# Gap Analysis & Planning
+/docs/GAP_ANALYSIS.md               @tech-lead @architect @pm-tpm
+/docs/PROJECT_STATUS.md             @tech-lead @pm-tpm
+
+# =============================================================================
+# Configuration & Build
+# =============================================================================
+
+# Go Modules
+/go.mod                             @tech-lead @backend-team
+/go.sum                             @tech-lead @backend-team
+/go.work                            @tech-lead @backend-team
+
+# Makefile
+/Makefile                           @devops-team @tech-lead
+
+# Configuration Files
+/*.yaml                             @devops-team @tech-lead
+/*.yml                              @devops-team @tech-lead
+/*.toml                             @devops-team @tech-lead
+/*.json                             @devops-team @tech-lead
+
+# =============================================================================
+# Security-Critical Files (require security team review)
+# =============================================================================
+
+# Authentication & Authorization
+**/auth*.go                         @security-team @backend-team
+**/security*.go                     @security-team
+**/crypto*.go                       @security-team
+
+# Secrets & Keys (should never be committed, but require review if they are)
+**/*.pem                            @security-team @devops-team
+**/*.key                            @security-team @devops-team
+**/*.crt                            @security-team @devops-team
+**/*secret*                         @security-team
+
+# =============================================================================
+# High-Risk Changes (require multiple approvals)
+# =============================================================================
+
+# Database Migrations (require careful review)
+/migrations/                        @database-specialists @backend-team @tech-lead
+
+# Payment & Economic Logic (require careful review)
+/libs/payment/                      @economic-team @security-team @tech-lead
+/libs/economic/                     @economic-team @security-team @tech-lead
+
+# Smart Contracts (if added in future)
+/contracts/                         @blockchain-team @security-team @tech-lead
+
+# =============================================================================
+# GitHub Configuration (protect repo settings)
+# =============================================================================
+
+/.github/                           @tech-lead @community-manager
+/.github/CODEOWNERS                 @tech-lead
+/.github/workflows/                 @devops-team @tech-lead
+
+# =============================================================================
+# Example Team Assignments (uncomment and customize)
+# =============================================================================
+#
+# Replace these with actual GitHub usernames or team names:
+#
+# @tech-lead              -> @alice
+# @senior-engineer        -> @bob
+# @networking-team        -> @zerostate/networking
+# @backend-team           -> @zerostate/backend
+# @frontend-team          -> @zerostate/frontend
+# @devops-team            -> @zerostate/devops
+# @sre-team               -> @zerostate/sre
+# @security-team          -> @zerostate/security
+# @qa-team                -> @zerostate/qa
+# @architect              -> @charlie
+# @pm-tpm                 -> @diana
+# @database-specialists   -> @zerostate/database
+# @api-specialists        -> @zerostate/api
+# @observability-team     -> @zerostate/observability
+# @performance-team       -> @zerostate/performance
+# @documentation-team     -> @zerostate/docs
+# @community-manager      -> @eve
+# @mentor-team            -> @zerostate/mentors
+# @blockchain-team        -> @zerostate/blockchain
+# @economic-team          -> @zerostate/economic
+# @infrastructure-team    -> @zerostate/infra
+# @execution-team         -> @zerostate/execution
+
+# =============================================================================
+# Notes for Team Setup
+# =============================================================================
+#
+# 1. Create GitHub teams in your organization settings:
+#    - Settings → Teams → New team
+#    - Add members to each team
+#
+# 2. Update this file with actual team names or usernames
+#
+# 3. Branch protection rules (recommended):
+#    - Require 2 approvals for main branch
+#    - Require CODEOWNERS review
+#    - Require status checks to pass
+#    - Require branches to be up to date
+#
+# 4. For high-risk changes, consider:
+#    - Requiring specific reviewers (e.g., @security-team for auth changes)
+#    - Requiring more approvals (3+ for payment/economic logic)
+#    - Adding manual approval steps in CI/CD
+#
+# 5. Review and update this file as team structure evolves
+#
