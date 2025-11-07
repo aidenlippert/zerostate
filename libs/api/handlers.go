@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/aidenlippert/zerostate/libs/identity"
+	"github.com/aidenlippert/zerostate/libs/orchestration"
 	"github.com/aidenlippert/zerostate/libs/search"
 	"github.com/libp2p/go-libp2p/core/host"
 	"go.uber.org/zap"
@@ -12,14 +13,14 @@ import (
 // Handlers holds all API request handlers and their dependencies
 type Handlers struct {
 	// Core dependencies
-	logger *zap.Logger
-	host   host.Host
-	signer *identity.Signer
-	hnsw   *search.HNSWIndex
+	logger    *zap.Logger
+	host      host.Host
+	signer    *identity.Signer
+	hnsw      *search.HNSWIndex
+	taskQueue *orchestration.TaskQueue
 
 	// Services (to be added)
 	// orchestrator   *orchestration.Orchestrator
-	// taskQueue      *TaskQueue
 	// userManager    *auth.UserManager
 	// paymentService *payment.Service
 
@@ -33,17 +34,19 @@ func NewHandlers(
 	host host.Host,
 	signer *identity.Signer,
 	hnsw *search.HNSWIndex,
+	taskQueue *orchestration.TaskQueue,
 ) *Handlers {
 	if logger == nil {
 		logger = zap.NewNop()
 	}
 
 	return &Handlers{
-		logger: logger,
-		host:   host,
-		signer: signer,
-		hnsw:   hnsw,
-		ctx:    ctx,
+		logger:    logger,
+		host:      host,
+		signer:    signer,
+		hnsw:      hnsw,
+		taskQueue: taskQueue,
+		ctx:       ctx,
 	}
 }
 

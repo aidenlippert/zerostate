@@ -255,3 +255,8 @@ func (s *Server) Address() string {
 func (s *Server) Context() context.Context {
 	return s.ctx
 }
+
+// Router returns the server's Gin router (for testing)
+func (s *Server) Router() *gin.Engine {
+	return s.router
+}

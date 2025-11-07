@@ -9,6 +9,7 @@ use (
 	./libs/guild
 	./libs/identity
 	./libs/metrics
+	./libs/orchestration
 	./libs/p2p
 	./libs/payment
 	./libs/reputation
