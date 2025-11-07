@@ -146,6 +146,14 @@ func (s *Server) setupRoutes() {
 		s.router.GET(s.config.MetricsPath, gin.WrapH(promhttp.Handler()))
 	}
 
+	// Serve static files (Web UI)
+	s.router.Static("/static", "./web/static")
+	s.router.StaticFile("/", "./web/static/index.html")
+	s.router.StaticFile("/submit-task", "./web/static/index.html")
+	s.router.StaticFile("/tasks", "./web/static/index.html")
+	s.router.StaticFile("/agents", "./web/static/index.html")
+	s.router.StaticFile("/metrics", "./web/static/index.html")
+
 	// API v1 routes
 	v1 := s.router.Group("/api/v1")
 	{
