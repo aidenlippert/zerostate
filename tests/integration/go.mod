@@ -3,12 +3,18 @@ module github.com/zerostate/integration
 go 1.21
 
 require (
+	github.com/libp2p/go-libp2p v0.32.0
 	github.com/stretchr/testify v1.8.4
+	go.uber.org/zap v1.26.0
+	github.com/zerostate/libs/execution v0.0.0
+	github.com/zerostate/libs/guild v0.0.0
 	zerostate/libs/identity v0.0.0
 	zerostate/libs/p2p v0.0.0
 )
 
 replace (
+	github.com/zerostate/libs/execution => ../../libs/execution
+	github.com/zerostate/libs/guild => ../../libs/guild
 	zerostate/libs/identity => ../../libs/identity
 	zerostate/libs/p2p => ../../libs/p2p
 )
