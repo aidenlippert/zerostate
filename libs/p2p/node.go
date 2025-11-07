@@ -48,15 +48,16 @@ type Config struct {
 
 // Node represents a zerostate P2P node
 type Node struct {
-	host       host.Host
-	dht        *dht.IpfsDHT
-	qtable     *routing.QTable
-	protocol   *ProtocolNegotiator
-	flowCtrl   *FlowController
-	gossip     *GossipService
-	config     *Config
-	logger     *zap.Logger
-	tracer     trace.Tracer
+	host            host.Host
+	dht             *dht.IpfsDHT
+	qtable          *routing.QTable
+	protocol        *ProtocolNegotiator
+	flowCtrl        *FlowController
+	gossip          *GossipService
+	providerRefresh *ProviderRefresher
+	config          *Config
+	logger          *zap.Logger
+	tracer          trace.Tracer
 }
 
 // NewNode creates and initializes a new P2P node
@@ -165,6 +166,10 @@ func (n *Node) initDHT(ctx context.Context) error {
 	}
 
 	n.dht = kdht
+
+	// Initialize provider refresher
+	n.providerRefresh = NewProviderRefresher(ctx, kdht, nil, n.logger)
+
 	n.logger.Info("DHT initialized",
 		zap.String("protocol", DHTProtocolID),
 		zap.Int("k", DefaultK),
@@ -249,6 +254,11 @@ func (n *Node) Host() host.Host {
 // Close stops the P2P node
 func (n *Node) Close() error {
 	n.logger.Info("shutting down node")
+	if n.providerRefresh != nil {
+		if err := n.providerRefresh.Close(); err != nil {
+			n.logger.Error("error closing provider refresh", zap.Error(err))
+		}
+	}
 	if n.gossip != nil {
 		if err := n.gossip.Close(); err != nil {
 			n.logger.Error("error closing gossip service", zap.Error(err))
@@ -304,6 +314,11 @@ func (n *Node) FlowControl() *FlowController {
 // Gossip returns the gossip service
 func (n *Node) Gossip() *GossipService {
 	return n.gossip
+}
+
+// ProviderRefresh returns the provider refresher
+func (n *Node) ProviderRefresh() *ProviderRefresher {
+	return n.providerRefresh
 }
 
 // multiaddrsToStrings converts multiaddrs to strings
