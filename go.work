@@ -3,6 +3,7 @@ go 1.24.10
 toolchain go1.24.10
 
 use (
+	./libs/api
 	./libs/economic
 	./libs/execution
 	./libs/guild
