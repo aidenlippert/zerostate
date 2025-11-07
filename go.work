@@ -8,6 +8,7 @@ use (
 	./libs/identity
 	./libs/p2p
 	./libs/payment
+	./libs/reputation
 	./libs/routing
 	./libs/search
 	./libs/telemetry
