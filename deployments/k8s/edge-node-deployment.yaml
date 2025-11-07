@@ -1,0 +1,117 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zerostate-edge-node
+  labels:
+    app: zerostate
+    component: edge-node
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: zerostate
+      component: edge-node
+  template:
+    metadata:
+      labels:
+        app: zerostate
+        component: edge-node
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+      - name: edge-node
+        image: zerostate-edge-node:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: p2p
+          containerPort: 4001
+          protocol: UDP
+        - name: metrics
+          containerPort: 8080
+          protocol: TCP
+        env:
+        - name: ZEROSTATE_LOG_LEVEL
+          value: "info"
+        - name: ZEROSTATE_LOG_FORMAT
+          value: "json"
+        - name: ZEROSTATE_LISTEN
+          value: "/ip4/0.0.0.0/udp/4001/quic-v1"
+        - name: ZEROSTATE_BOOTSTRAP
+          value: "/dns4/zerostate-bootnode/udp/4001/quic-v1/p2p/$(BOOTNODE_PEER_ID)"
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+
+        # Liveness probe - restart if unhealthy
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+            scheme: HTTP
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+
+        # Readiness probe - remove from service if not ready
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8080
+            scheme: HTTP
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 2
+
+        # Startup probe - allow more time for initial startup
+        startupProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+            scheme: HTTP
+          initialDelaySeconds: 0
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 12  # 2 minutes max startup time
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zerostate-edge-node
+  labels:
+    app: zerostate
+    component: edge-node
+spec:
+  type: ClusterIP
+  selector:
+    app: zerostate
+    component: edge-node
+  ports:
+  - name: p2p
+    port: 4001
+    targetPort: 4001
+    protocol: UDP
+  - name: metrics
+    port: 8080
+    targetPort: 8080
+    protocol: TCP

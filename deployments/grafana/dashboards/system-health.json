@@ -1,0 +1,445 @@
+{
+  "dashboard": {
+    "id": null,
+    "uid": "zerostate-health",
+    "title": "ZeroState - System Health",
+    "tags": ["zerostate", "health", "monitoring", "alerts"],
+    "timezone": "browser",
+    "schemaVersion": 38,
+    "version": 1,
+    "refresh": "30s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Overall System Status",
+        "type": "stat",
+        "gridPos": {"x": 0, "y": 0, "w": 24, "h": 4},
+        "targets": [
+          {
+            "expr": "(sum(up{job=~\"bootnode|edge-nodes|relay\"}) / count(up{job=~\"bootnode|edge-nodes|relay\"})) * 100",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "colorMode": "background",
+          "graphMode": "none",
+          "textMode": "value_and_name",
+          "reduceOptions": {"calcs": ["lastNotNull"]}
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "decimals": 1,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "red"},
+                {"value": 80, "color": "yellow"},
+                {"value": 95, "color": "green"}
+              ]
+            },
+            "mappings": [
+              {
+                "type": "range",
+                "options": {
+                  "from": 95,
+                  "to": 100,
+                  "result": {"text": "🟢 HEALTHY", "color": "green"}
+                }
+              },
+              {
+                "type": "range",
+                "options": {
+                  "from": 70,
+                  "to": 95,
+                  "result": {"text": "🟡 DEGRADED", "color": "yellow"}
+                }
+              },
+              {
+                "type": "range",
+                "options": {
+                  "from": 0,
+                  "to": 70,
+                  "result": {"text": "🔴 CRITICAL", "color": "red"}
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "Service Uptime",
+        "type": "stat",
+        "gridPos": {"x": 0, "y": 4, "w": 6, "h": 3},
+        "targets": [
+          {
+            "expr": "avg(up{job=\"bootnode\"})",
+            "refId": "A",
+            "legendFormat": "Bootnode"
+          }
+        ],
+        "options": {
+          "colorMode": "value",
+          "textMode": "value_and_name"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percentunit",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "red"},
+                {"value": 0.9, "color": "yellow"},
+                {"value": 0.99, "color": "green"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 3,
+        "title": "Edge Nodes Uptime",
+        "type": "stat",
+        "gridPos": {"x": 6, "y": 4, "w": 6, "h": 3},
+        "targets": [
+          {
+            "expr": "avg(up{job=\"edge-nodes\"})",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percentunit",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "red"},
+                {"value": 0.8, "color": "yellow"},
+                {"value": 0.95, "color": "green"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "Relay Uptime",
+        "type": "stat",
+        "gridPos": {"x": 12, "y": 4, "w": 6, "h": 3},
+        "targets": [
+          {
+            "expr": "avg(up{job=\"relay\"})",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percentunit",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "red"},
+                {"value": 0.9, "color": "yellow"},
+                {"value": 0.99, "color": "green"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 5,
+        "title": "Active Alerts",
+        "type": "stat",
+        "gridPos": {"x": 18, "y": 4, "w": 6, "h": 3},
+        "targets": [
+          {
+            "expr": "count(ALERTS{alertstate=\"firing\"})",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "colorMode": "background"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "green"},
+                {"value": 1, "color": "yellow"},
+                {"value": 5, "color": "red"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 6,
+        "title": "Error Rate by Component",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 7, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(p2p_messages_total{status=\"failed\"}[1m])",
+            "refId": "A",
+            "legendFormat": "P2P Errors"
+          },
+          {
+            "expr": "rate(execution_tasks_total{result=\"failure\"}[1m])",
+            "refId": "B",
+            "legendFormat": "Execution Errors"
+          },
+          {
+            "expr": "rate(economic_payment_failures_total[1m])",
+            "refId": "C",
+            "legendFormat": "Payment Errors"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line",
+              "fillOpacity": 30
+            },
+            "unit": "errors/s"
+          },
+          "overrides": [
+            {
+              "matcher": {"id": "byRegexp", "options": ".*Error.*"},
+              "properties": [{"id": "color", "value": {"fixedColor": "red", "mode": "palette-classic"}}]
+            }
+          ]
+        }
+      },
+      {
+        "id": 7,
+        "title": "Component Health Scores",
+        "type": "bargauge",
+        "gridPos": {"x": 12, "y": 7, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "(sum(rate(p2p_messages_total{status=\"success\"}[5m])) / sum(rate(p2p_messages_total[5m]))) * 100",
+            "refId": "A",
+            "legendFormat": "P2P Layer"
+          },
+          {
+            "expr": "(sum(rate(execution_tasks_total{result=\"success\"}[5m])) / sum(rate(execution_tasks_total[5m]))) * 100",
+            "refId": "B",
+            "legendFormat": "Execution Layer"
+          },
+          {
+            "expr": "(sum(rate(economic_payments_total{status=\"success\"}[5m])) / sum(rate(economic_payments_total[5m]))) * 100",
+            "refId": "C",
+            "legendFormat": "Economic Layer"
+          }
+        ],
+        "options": {
+          "orientation": "horizontal",
+          "displayMode": "gradient",
+          "showUnfilled": true
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 0,
+            "max": 100,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "red"},
+                {"value": 90, "color": "yellow"},
+                {"value": 99, "color": "green"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 8,
+        "title": "Key Metrics Summary",
+        "type": "table",
+        "gridPos": {"x": 0, "y": 15, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(p2p_connections_total{state=\"active\"})",
+            "refId": "A",
+            "instant": true,
+            "legendFormat": "Active Connections"
+          },
+          {
+            "expr": "sum(execution_guilds_total{state=\"active\"})",
+            "refId": "B",
+            "instant": true,
+            "legendFormat": "Active Guilds"
+          },
+          {
+            "expr": "sum(economic_channels_active)",
+            "refId": "C",
+            "instant": true,
+            "legendFormat": "Active Channels"
+          },
+          {
+            "expr": "economic_total_value_locked",
+            "refId": "D",
+            "instant": true,
+            "legendFormat": "Total Value Locked"
+          },
+          {
+            "expr": "economic_active_participants",
+            "refId": "E",
+            "instant": true,
+            "legendFormat": "Active Participants"
+          }
+        ],
+        "transformations": [
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {},
+              "indexByName": {},
+              "renameByName": {
+                "__name__": "Metric",
+                "Value": "Current Value"
+              }
+            }
+          }
+        ],
+        "options": {
+          "showHeader": true
+        },
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "align": "auto"
+            }
+          },
+          "overrides": [
+            {
+              "matcher": {"id": "byName", "options": "Total Value Locked"},
+              "properties": [{"id": "unit", "value": "currencyUSD"}]
+            }
+          ]
+        }
+      },
+      {
+        "id": 9,
+        "title": "Alert History (Last Hour)",
+        "type": "table",
+        "gridPos": {"x": 12, "y": 15, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "ALERTS{alertstate=\"firing\"}",
+            "refId": "A",
+            "instant": true
+          }
+        ],
+        "transformations": [
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {"__name__": true, "job": false},
+              "indexByName": {},
+              "renameByName": {
+                "alertname": "Alert",
+                "severity": "Severity",
+                "instance": "Instance"
+              }
+            }
+          }
+        ],
+        "options": {
+          "showHeader": true,
+          "sortBy": [{"displayName": "Severity", "desc": false}]
+        }
+      },
+      {
+        "id": 10,
+        "title": "Network Latency (p95)",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 23, "w": 12, "h": 6},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(p2p_health_check_latency_seconds_bucket[1m]))",
+            "refId": "A",
+            "legendFormat": "P2P Health Check"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(execution_task_duration_seconds_bucket[1m]))",
+            "refId": "B",
+            "legendFormat": "Task Execution"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(economic_payment_duration_seconds_bucket[1m]))",
+            "refId": "C",
+            "legendFormat": "Payment Processing"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line",
+              "fillOpacity": 20
+            },
+            "unit": "s",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "green"},
+                {"value": 5, "color": "yellow"},
+                {"value": 15, "color": "red"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 11,
+        "title": "Resource Warnings",
+        "type": "logs",
+        "gridPos": {"x": 12, "y": 23, "w": 12, "h": 6},
+        "targets": [
+          {
+            "expr": "{job=~\"bootnode|edge-nodes|relay\"} |= \"ERROR\" or \"WARN\"",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "showTime": true,
+          "showLabels": false,
+          "sortOrder": "Descending"
+        }
+      },
+      {
+        "id": 12,
+        "title": "Critical Metrics Heatmap",
+        "type": "status-history",
+        "gridPos": {"x": 0, "y": 29, "w": 24, "h": 6},
+        "targets": [
+          {
+            "expr": "up{job=~\"bootnode|edge-nodes|relay\"}",
+            "refId": "A",
+            "legendFormat": "{{job}} - {{instance}}"
+          }
+        ],
+        "options": {
+          "showValue": "never",
+          "rowHeight": 0.9
+        },
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "lineWidth": 0,
+              "fillOpacity": 70
+            }
+          }
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,107 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zerostate-bootnode
+  labels:
+    app: zerostate
+    component: bootnode
+spec:
+  replicas: 1  # Bootnodes typically run as single instances
+  selector:
+    matchLabels:
+      app: zerostate
+      component: bootnode
+  template:
+    metadata:
+      labels:
+        app: zerostate
+        component: bootnode
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+      - name: bootnode
+        image: zerostate-bootnode:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: p2p
+          containerPort: 4001
+          protocol: UDP
+        - name: metrics
+          containerPort: 8080
+          protocol: TCP
+        env:
+        - name: ZEROSTATE_LOG_LEVEL
+          value: "info"
+        - name: ZEROSTATE_LOG_FORMAT
+          value: "json"
+        - name: ZEROSTATE_LISTEN
+          value: "/ip4/0.0.0.0/udp/4001/quic-v1"
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+
+        # Liveness probe
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 20
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+        # Readiness probe
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 2
+
+        # Startup probe
+        startupProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          periodSeconds: 10
+          failureThreshold: 10  # 100 seconds max startup
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zerostate-bootnode
+  labels:
+    app: zerostate
+    component: bootnode
+spec:
+  type: ClusterIP
+  selector:
+    app: zerostate
+    component: bootnode
+  ports:
+  - name: p2p
+    port: 4001
+    targetPort: 4001
+    protocol: UDP
+  - name: metrics
+    port: 8080
+    targetPort: 8080
+    protocol: TCP

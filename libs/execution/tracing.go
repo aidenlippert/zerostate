@@ -1,0 +1,317 @@
+package execution
+
+import (
+	"context"
+	"time"
+
+	"github.com/zerostate/libs/telemetry"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
+)
+
+// ExecutionTracer provides tracing utilities for WASM task execution
+type ExecutionTracer struct {
+	helper *telemetry.TraceHelper
+}
+
+// NewExecutionTracer creates a new execution tracer
+func NewExecutionTracer() *ExecutionTracer {
+	return &ExecutionTracer{
+		helper: telemetry.NewTraceHelper("execution"),
+	}
+}
+
+// TraceTaskExecution instruments task execution end-to-end
+func (t *ExecutionTracer) TraceTaskExecution(ctx context.Context, taskID, guildID string) (context.Context, trace.Span) {
+	return t.helper.StartSpan(ctx, "execution.task",
+		telemetry.WithTaskID(taskID),
+		telemetry.WithGuildID(guildID),
+	)
+}
+
+// TraceWASMCompile instruments WASM module compilation
+func (t *ExecutionTracer) TraceWASMCompile(ctx context.Context, moduleSize int) (context.Context, trace.Span) {
+	ctx, span := t.helper.StartSpan(ctx, "execution.wasm.compile")
+
+	telemetry.RecordSize(span, int64(moduleSize))
+
+	return ctx, span
+}
+
+// TraceWASMInstantiate instruments WASM module instantiation
+func (t *ExecutionTracer) TraceWASMInstantiate(ctx context.Context) (context.Context, trace.Span) {
+	return t.helper.StartSpan(ctx, "execution.wasm.instantiate")
+}
+
+// TraceWASMExecute instruments WASM function execution
+func (t *ExecutionTracer) TraceWASMExecute(ctx context.Context, functionName string) (context.Context, trace.Span) {
+	ctx, span := t.helper.StartSpan(ctx, "execution.wasm.execute")
+
+	span.SetAttributes(
+		attribute.String("wasm.function", functionName),
+	)
+
+	return ctx, span
+}
+
+// TraceReceiptGeneration instruments cryptographic receipt generation
+func (t *ExecutionTracer) TraceReceiptGeneration(ctx context.Context, taskID string) (context.Context, trace.Span) {
+	return t.helper.StartSpan(ctx, "execution.receipt.generate",
+		telemetry.WithTaskID(taskID),
+	)
+}
+
+// TraceManifestValidation instruments manifest validation
+func (t *ExecutionTracer) TraceManifestValidation(ctx context.Context) (context.Context, trace.Span) {
+	return t.helper.StartSpan(ctx, "execution.manifest.validate")
+}
+
+// TraceResourceMeasurement instruments resource usage measurement
+func (t *ExecutionTracer) TraceResourceMeasurement(ctx context.Context, taskID string) (context.Context, trace.Span) {
+	return t.helper.StartSpan(ctx, "execution.resources.measure",
+		telemetry.WithTaskID(taskID),
+	)
+}
+
+// Example: Instrumented WASM execution with distributed tracing
+func (wr *WASMRunner) ExecuteWithTracing(ctx context.Context, taskID, guildID string, wasmBytes []byte, functionName string) (*ExecutionResult, error) {
+	tracer := NewExecutionTracer()
+
+	// Top-level task execution span
+	ctx, taskSpan := tracer.TraceTaskExecution(ctx, taskID, guildID)
+	defer taskSpan.End()
+
+	start := time.Now()
+
+	// Add task metadata
+	taskSpan.SetAttributes(
+		attribute.Int("wasm.module_size", len(wasmBytes)),
+		attribute.String("wasm.function", functionName),
+		attribute.Int64("config.max_memory", int64(wr.config.MaxMemory)),
+		attribute.String("config.max_execution_time", wr.config.MaxExecutionTime.String()),
+	)
+
+	// Phase 1: Compile module
+	ctx, compileSpan := tracer.TraceWASMCompile(ctx, len(wasmBytes))
+	compileStart := time.Now()
+
+	// Call original Execute method
+	result, err := wr.Execute(ctx, wasmBytes, functionName, nil, nil, nil)
+
+	compileDuration := time.Since(compileStart)
+	telemetry.RecordSuccess(compileSpan, compileDuration.Milliseconds())
+	compileSpan.End()
+
+	// Phase 2: Record execution results
+	totalDuration := time.Since(start)
+
+	if err != nil {
+		// Record error details
+		telemetry.RecordError(taskSpan, err)
+
+		taskSpan.SetAttributes(
+			attribute.String("error.type", classifyExecutionError(err)),
+			attribute.String("status", "failed"),
+		)
+
+		if result != nil {
+			taskSpan.SetAttributes(
+				attribute.Int64("execution.duration_ms", result.Duration.Milliseconds()),
+				attribute.Int64("execution.memory_used", int64(result.MemoryUsed)),
+			)
+		}
+
+		return result, err
+	}
+
+	// Record success metrics
+	telemetry.RecordSuccess(taskSpan, totalDuration.Milliseconds())
+
+	taskSpan.SetAttributes(
+		attribute.String("status", "success"),
+		attribute.Int("exit_code", int(result.ExitCode)),
+		attribute.Int64("execution.duration_ms", result.Duration.Milliseconds()),
+		attribute.Int64("execution.memory_used", int64(result.MemoryUsed)),
+		attribute.Float64("execution.duration_seconds", result.Duration.Seconds()),
+	)
+
+	// Check for resource limit warnings
+	memoryPercent := float64(result.MemoryUsed) / float64(wr.config.MaxMemory) * 100
+	if memoryPercent > 80 {
+		taskSpan.SetAttributes(
+			attribute.Float64("warning.memory_usage_percent", memoryPercent),
+		)
+		taskSpan.AddEvent("high_memory_usage", trace.WithAttributes(
+			attribute.Float64("memory_percent", memoryPercent),
+		))
+	}
+
+	timePercent := float64(result.Duration) / float64(wr.config.MaxExecutionTime) * 100
+	if timePercent > 80 {
+		taskSpan.SetAttributes(
+			attribute.Float64("warning.time_usage_percent", timePercent),
+		)
+		taskSpan.AddEvent("approaching_timeout", trace.WithAttributes(
+			attribute.Float64("time_percent", timePercent),
+		))
+	}
+
+	return result, nil
+}
+
+// Example: Instrumented receipt generation with tracing
+func GenerateReceiptWithTracing(ctx context.Context, taskID string, result *ExecutionResult) (*Receipt, error) {
+	tracer := NewExecutionTracer()
+	ctx, span := tracer.TraceReceiptGeneration(ctx, taskID)
+	defer span.End()
+
+	start := time.Now()
+
+	// Create receipt (placeholder - actual implementation would be in receipts.go)
+	// receipt := &Receipt{
+	//     TaskID:      taskID,
+	//     ExitCode:    result.ExitCode,
+	//     Duration:    result.Duration,
+	//     MemoryUsed:  result.MemoryUsed,
+	//     Timestamp:   time.Now(),
+	// }
+
+	// Sign receipt
+	// signature, err := signReceipt(ctx, receipt)
+	var err error = nil // placeholder
+
+	duration := time.Since(start)
+
+	if err != nil {
+		telemetry.RecordError(span, err)
+		span.SetAttributes(
+			attribute.String("error.type", "signature_failed"),
+		)
+		return nil, err
+	}
+
+	telemetry.RecordSuccess(span, duration.Milliseconds())
+
+	span.SetAttributes(
+		attribute.String("receipt.task_id", taskID),
+		attribute.Int("receipt.exit_code", int(result.ExitCode)),
+		attribute.Int64("receipt.memory_used", int64(result.MemoryUsed)),
+		attribute.String("receipt.duration", result.Duration.String()),
+	)
+
+	return nil, nil // placeholder
+}
+
+// Example: Instrumented manifest validation with tracing
+func ValidateManifestWithTracing(ctx context.Context, manifest *Manifest) error {
+	tracer := NewExecutionTracer()
+	ctx, span := tracer.TraceManifestValidation(ctx)
+	defer span.End()
+
+	start := time.Now()
+
+	// Validate manifest structure
+	// err := validateManifestStructure(manifest)
+	var err error = nil // placeholder
+
+	duration := time.Since(start)
+
+	if err != nil {
+		telemetry.RecordError(span, err)
+		span.SetAttributes(
+			attribute.String("error.type", "validation_failed"),
+			attribute.String("manifest.name", manifest.Name),
+		)
+		return err
+	}
+
+	telemetry.RecordSuccess(span, duration.Milliseconds())
+
+	span.SetAttributes(
+		attribute.String("manifest.name", manifest.Name),
+		attribute.String("manifest.version", manifest.Version),
+		attribute.StringSlice("manifest.capabilities", manifest.Capabilities),
+		attribute.Int64("manifest.max_memory", int64(manifest.Resources.MaxMemory)),
+		attribute.String("manifest.max_duration", manifest.Resources.MaxDuration.String()),
+	)
+
+	return nil
+}
+
+// Example: End-to-end traced task execution flow
+func ExecuteTaskWithFullTracing(ctx context.Context, taskID, guildID string, wasmBytes []byte, manifest *Manifest, traceContext string) (*Receipt, error) {
+	// Extract remote trace context from guild coordinator
+	ctx = telemetry.ExtractTraceContext(ctx, traceContext)
+
+	tracer := NewExecutionTracer()
+
+	// Top-level task span
+	ctx, taskSpan := tracer.TraceTaskExecution(ctx, taskID, guildID)
+	defer taskSpan.End()
+
+	// Phase 1: Validate manifest
+	ctx, manifestSpan := tracer.TraceManifestValidation(ctx)
+	err := ValidateManifestWithTracing(ctx, manifest)
+	manifestSpan.End()
+
+	if err != nil {
+		telemetry.RecordError(taskSpan, err)
+		return nil, err
+	}
+
+	// Phase 2: Execute WASM
+	runner := &WASMRunner{} // placeholder - would be properly initialized
+	result, err := runner.ExecuteWithTracing(ctx, taskID, guildID, wasmBytes, "_start")
+
+	if err != nil {
+		telemetry.RecordError(taskSpan, err)
+		return nil, err
+	}
+
+	// Phase 3: Generate receipt
+	ctx, receiptSpan := tracer.TraceReceiptGeneration(ctx, taskID)
+	receipt, err := GenerateReceiptWithTracing(ctx, taskID, result)
+	receiptSpan.End()
+
+	if err != nil {
+		telemetry.RecordError(taskSpan, err)
+		return nil, err
+	}
+
+	// Phase 4: Measure resources
+	ctx, resourceSpan := tracer.TraceResourceMeasurement(ctx, taskID)
+	resourceSpan.SetAttributes(
+		attribute.Int64("resources.memory_bytes", int64(result.MemoryUsed)),
+		attribute.Int64("resources.duration_ms", result.Duration.Milliseconds()),
+		attribute.Int("resources.exit_code", int(result.ExitCode)),
+	)
+	telemetry.RecordSuccess(resourceSpan, 0)
+	resourceSpan.End()
+
+	// Mark task as successful
+	taskSpan.SetStatus(codes.Ok, "task completed successfully")
+	taskSpan.SetAttributes(
+		attribute.String("status", "success"),
+		attribute.String("task.id", taskID),
+		attribute.String("guild.id", guildID),
+	)
+
+	return receipt, nil
+}
+
+// classifyExecutionError maps execution errors to trace-friendly error types
+func classifyExecutionError(err error) string {
+	switch err {
+	case ErrTimeout:
+		return "timeout"
+	case ErrMemoryLimit:
+		return "memory_limit"
+	case ErrInvalidModule:
+		return "invalid_module"
+	case ErrExecutionFailed:
+		return "execution_failed"
+	default:
+		return "unknown"
+	}
+}

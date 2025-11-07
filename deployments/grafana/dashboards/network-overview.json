@@ -1,0 +1,408 @@
+{
+  "dashboard": {
+    "id": null,
+    "uid": "zerostate-network",
+    "title": "ZeroState - Network Overview",
+    "tags": ["zerostate", "network", "p2p", "libp2p"],
+    "timezone": "browser",
+    "schemaVersion": 38,
+    "version": 1,
+    "refresh": "10s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "timepicker": {
+      "refresh_intervals": ["5s", "10s", "30s", "1m", "5m"]
+    },
+    "annotations": {
+      "list": [
+        {
+          "datasource": "Prometheus",
+          "enable": true,
+          "expr": "ALERTS{alertname=~\".*Network.*\"}",
+          "iconColor": "red",
+          "name": "Network Alerts",
+          "titleFormat": "{{ alertname }}"
+        }
+      ]
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Network Health Overview",
+        "type": "stat",
+        "gridPos": {"x": 0, "y": 0, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "sum(p2p_connections_total{state=\"active\"})",
+            "refId": "A",
+            "legendFormat": "Active Connections"
+          }
+        ],
+        "options": {
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"]
+          },
+          "orientation": "auto",
+          "textMode": "auto",
+          "colorMode": "value",
+          "graphMode": "area"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "red"},
+                {"value": 3, "color": "yellow"},
+                {"value": 10, "color": "green"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "Total Peers Discovered",
+        "type": "stat",
+        "gridPos": {"x": 6, "y": 0, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "p2p_peers_discovered",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"]
+          },
+          "colorMode": "value",
+          "graphMode": "area"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "red"},
+                {"value": 5, "color": "yellow"},
+                {"value": 20, "color": "green"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 3,
+        "title": "Bandwidth Usage (TX)",
+        "type": "stat",
+        "gridPos": {"x": 12, "y": 0, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "rate(p2p_bandwidth_bytes_total{direction=\"tx\"}[1m])",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"]
+          },
+          "colorMode": "value",
+          "graphMode": "area"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "Bps",
+            "decimals": 2
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "Message Success Rate",
+        "type": "gauge",
+        "gridPos": {"x": 18, "y": 0, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "sum(rate(p2p_messages_total{status=\"success\"}[5m])) / sum(rate(p2p_messages_total[5m])) * 100",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "showThresholdLabels": true,
+          "showThresholdMarkers": true
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 0,
+            "max": 100,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "red"},
+                {"value": 80, "color": "yellow"},
+                {"value": 95, "color": "green"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 5,
+        "title": "Active Connections by State",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 4, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "p2p_connections_total{state=\"active\"}",
+            "refId": "A",
+            "legendFormat": "Active"
+          },
+          {
+            "expr": "p2p_connections_total{state=\"idle\"}",
+            "refId": "B",
+            "legendFormat": "Idle"
+          },
+          {
+            "expr": "p2p_connections_total{state=\"total\"}",
+            "refId": "C",
+            "legendFormat": "Total"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "smooth",
+              "fillOpacity": 10,
+              "showPoints": "never"
+            },
+            "unit": "short"
+          },
+          "overrides": [
+            {
+              "matcher": {"id": "byName", "options": "Active"},
+              "properties": [{"id": "color", "value": {"fixedColor": "green", "mode": "fixed"}}]
+            }
+          ]
+        },
+        "options": {
+          "tooltip": {"mode": "multi"},
+          "legend": {"displayMode": "list", "placement": "bottom"}
+        }
+      },
+      {
+        "id": 6,
+        "title": "Bandwidth (TX/RX)",
+        "type": "timeseries",
+        "gridPos": {"x": 12, "y": 4, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(p2p_bandwidth_bytes_total{direction=\"tx\"}[1m])",
+            "refId": "A",
+            "legendFormat": "TX - {{instance}}"
+          },
+          {
+            "expr": "rate(p2p_bandwidth_bytes_total{direction=\"rx\"}[1m])",
+            "refId": "B",
+            "legendFormat": "RX - {{instance}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "smooth",
+              "fillOpacity": 20
+            },
+            "unit": "Bps"
+          }
+        },
+        "options": {
+          "tooltip": {"mode": "multi"},
+          "legend": {"displayMode": "list", "placement": "bottom"}
+        }
+      },
+      {
+        "id": 7,
+        "title": "Message Throughput (sent/received/failed)",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 12, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(p2p_messages_total{status=\"sent\"}[1m])",
+            "refId": "A",
+            "legendFormat": "Sent"
+          },
+          {
+            "expr": "rate(p2p_messages_total{status=\"received\"}[1m])",
+            "refId": "B",
+            "legendFormat": "Received"
+          },
+          {
+            "expr": "rate(p2p_messages_total{status=\"failed\"}[1m])",
+            "refId": "C",
+            "legendFormat": "Failed"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "smooth",
+              "fillOpacity": 10
+            },
+            "unit": "msg/s"
+          },
+          "overrides": [
+            {
+              "matcher": {"id": "byName", "options": "Failed"},
+              "properties": [{"id": "color", "value": {"fixedColor": "red", "mode": "fixed"}}]
+            }
+          ]
+        }
+      },
+      {
+        "id": 8,
+        "title": "Health Check Status",
+        "type": "timeseries",
+        "gridPos": {"x": 12, "y": 12, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "p2p_health_check_latency_seconds",
+            "refId": "A",
+            "legendFormat": "{{peer_id}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "smooth"
+            },
+            "unit": "s",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "green"},
+                {"value": 1, "color": "yellow"},
+                {"value": 5, "color": "red"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 9,
+        "title": "Gossip Propagation",
+        "type": "stat",
+        "gridPos": {"x": 0, "y": 20, "w": 8, "h": 4},
+        "targets": [
+          {
+            "expr": "sum(rate(p2p_gossip_messages_total{status=\"propagated\"}[5m]))",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area",
+          "reduceOptions": {"calcs": ["lastNotNull"]}
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "msg/s",
+            "decimals": 2
+          }
+        }
+      },
+      {
+        "id": 10,
+        "title": "Connection Pool Size",
+        "type": "stat",
+        "gridPos": {"x": 8, "y": 20, "w": 8, "h": 4},
+        "targets": [
+          {
+            "expr": "p2p_connection_pool_size",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "red"},
+                {"value": 5, "color": "yellow"},
+                {"value": 10, "color": "green"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 11,
+        "title": "Circuit Relay Usage",
+        "type": "stat",
+        "gridPos": {"x": 16, "y": 20, "w": 8, "h": 4},
+        "targets": [
+          {
+            "expr": "sum(p2p_relay_connections_total{status=\"active\"})",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "color": {"mode": "palette-classic"}
+          }
+        }
+      },
+      {
+        "id": 12,
+        "title": "DHT Operations",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 24, "w": 24, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(p2p_dht_operations_total{operation=\"put\"}[1m])",
+            "refId": "A",
+            "legendFormat": "PUT"
+          },
+          {
+            "expr": "rate(p2p_dht_operations_total{operation=\"get\"}[1m])",
+            "refId": "B",
+            "legendFormat": "GET"
+          },
+          {
+            "expr": "rate(p2p_dht_operations_total{operation=\"find_peer\"}[1m])",
+            "refId": "C",
+            "legendFormat": "FIND_PEER"
+          },
+          {
+            "expr": "rate(p2p_dht_operations_total{operation=\"find_providers\"}[1m])",
+            "refId": "D",
+            "legendFormat": "FIND_PROVIDERS"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line",
+              "fillOpacity": 10
+            },
+            "unit": "ops/s"
+          }
+        }
+      }
+    ]
+  }
+}

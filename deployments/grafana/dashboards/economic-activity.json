@@ -1,0 +1,512 @@
+{
+  "dashboard": {
+    "id": null,
+    "uid": "zerostate-economic",
+    "title": "ZeroState - Economic Activity",
+    "tags": ["zerostate", "economic", "payment", "reputation", "tvl"],
+    "timezone": "browser",
+    "schemaVersion": 38,
+    "version": 1,
+    "refresh": "30s",
+    "time": {
+      "from": "now-6h",
+      "to": "now"
+    },
+    "annotations": {
+      "list": [
+        {
+          "datasource": "Prometheus",
+          "enable": true,
+          "expr": "ALERTS{alertname=~\".*Economic.*|.*Payment.*|.*Reputation.*\"}",
+          "iconColor": "red",
+          "name": "Economic Alerts"
+        }
+      ]
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Total Value Locked (TVL)",
+        "type": "stat",
+        "gridPos": {"x": 0, "y": 0, "w": 8, "h": 6},
+        "targets": [
+          {
+            "expr": "economic_total_value_locked",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area",
+          "reduceOptions": {"calcs": ["lastNotNull"]}
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "currencyUSD",
+            "decimals": 2,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "blue"},
+                {"value": 1000, "color": "green"},
+                {"value": 10000, "color": "yellow"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "Active Payment Channels",
+        "type": "stat",
+        "gridPos": {"x": 8, "y": 0, "w": 8, "h": 3},
+        "targets": [
+          {
+            "expr": "sum(economic_channels_active)",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "red"},
+                {"value": 5, "color": "yellow"},
+                {"value": 20, "color": "green"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 3,
+        "title": "Active Participants",
+        "type": "stat",
+        "gridPos": {"x": 16, "y": 0, "w": 8, "h": 3},
+        "targets": [
+          {
+            "expr": "economic_active_participants",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "red"},
+                {"value": 10, "color": "yellow"},
+                {"value": 50, "color": "green"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "Payment Success Rate",
+        "type": "gauge",
+        "gridPos": {"x": 8, "y": 3, "w": 8, "h": 3},
+        "targets": [
+          {
+            "expr": "sum(rate(economic_payments_total{status=\"success\"}[5m])) / sum(rate(economic_payments_total[5m])) * 100",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "showThresholdMarkers": true
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 0,
+            "max": 100,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "red"},
+                {"value": 95, "color": "yellow"},
+                {"value": 99, "color": "green"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 5,
+        "title": "Blacklisted Peers",
+        "type": "stat",
+        "gridPos": {"x": 16, "y": 3, "w": 8, "h": 3},
+        "targets": [
+          {
+            "expr": "economic_blacklisted_peers",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "colorMode": "value"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "green"},
+                {"value": 5, "color": "yellow"},
+                {"value": 10, "color": "red"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 6,
+        "title": "TVL Trend (24h)",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 6, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "economic_total_value_locked",
+            "refId": "A",
+            "legendFormat": "Total Value Locked"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "smooth",
+              "fillOpacity": 30,
+              "gradientMode": "hue"
+            },
+            "unit": "currencyUSD",
+            "decimals": 2
+          }
+        }
+      },
+      {
+        "id": 7,
+        "title": "Channel Lifecycle",
+        "type": "timeseries",
+        "gridPos": {"x": 12, "y": 6, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(economic_channels_total{state=\"opening\"}[1m])",
+            "refId": "A",
+            "legendFormat": "Opening"
+          },
+          {
+            "expr": "sum(economic_channels_active)",
+            "refId": "B",
+            "legendFormat": "Active"
+          },
+          {
+            "expr": "rate(economic_channels_total{state=\"closed\"}[1m])",
+            "refId": "C",
+            "legendFormat": "Closing"
+          },
+          {
+            "expr": "rate(economic_channels_total{state=\"disputed\"}[1m])",
+            "refId": "D",
+            "legendFormat": "Disputed"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line",
+              "fillOpacity": 20
+            },
+            "unit": "channels"
+          },
+          "overrides": [
+            {
+              "matcher": {"id": "byName", "options": "Disputed"},
+              "properties": [{"id": "color", "value": {"fixedColor": "red", "mode": "fixed"}}]
+            }
+          ]
+        }
+      },
+      {
+        "id": 8,
+        "title": "Payment Volume & Throughput",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 14, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(economic_payment_amount_sum[1m])",
+            "refId": "A",
+            "legendFormat": "Volume ($/s)"
+          },
+          {
+            "expr": "rate(economic_payments_total{status=\"success\"}[1m])",
+            "refId": "B",
+            "legendFormat": "Count (txn/s)"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line",
+              "fillOpacity": 20
+            }
+          },
+          "overrides": [
+            {
+              "matcher": {"id": "byName", "options": "Volume ($/s)"},
+              "properties": [
+                {"id": "unit", "value": "currencyUSD"},
+                {"id": "custom.axisPlacement", "value": "left"}
+              ]
+            },
+            {
+              "matcher": {"id": "byName", "options": "Count (txn/s)"},
+              "properties": [
+                {"id": "unit", "value": "txn/s"},
+                {"id": "custom.axisPlacement", "value": "right"}
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": 9,
+        "title": "Payment Amount Distribution",
+        "type": "timeseries",
+        "gridPos": {"x": 12, "y": 14, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, rate(economic_payment_amount_bucket[5m]))",
+            "refId": "A",
+            "legendFormat": "p50"
+          },
+          {
+            "expr": "histogram_quantile(0.90, rate(economic_payment_amount_bucket[5m]))",
+            "refId": "B",
+            "legendFormat": "p90"
+          },
+          {
+            "expr": "histogram_quantile(0.99, rate(economic_payment_amount_bucket[5m]))",
+            "refId": "C",
+            "legendFormat": "p99"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line",
+              "fillOpacity": 15
+            },
+            "unit": "currencyUSD",
+            "decimals": 4
+          }
+        }
+      },
+      {
+        "id": 10,
+        "title": "Reputation Score Distribution",
+        "type": "bargauge",
+        "gridPos": {"x": 0, "y": 22, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "topk(10, economic_reputation_score)",
+            "refId": "A",
+            "legendFormat": "{{peer_id}}"
+          }
+        ],
+        "options": {
+          "orientation": "horizontal",
+          "displayMode": "gradient",
+          "showUnfilled": true
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percentunit",
+            "min": 0,
+            "max": 1,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "red"},
+                {"value": 0.3, "color": "orange"},
+                {"value": 0.7, "color": "yellow"},
+                {"value": 0.9, "color": "green"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 11,
+        "title": "Task Success Rate by Peer (Top 10)",
+        "type": "timeseries",
+        "gridPos": {"x": 12, "y": 22, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "topk(10, economic_success_rate)",
+            "refId": "A",
+            "legendFormat": "{{peer_id}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line",
+              "lineWidth": 2
+            },
+            "unit": "percentunit",
+            "min": 0,
+            "max": 1
+          }
+        }
+      },
+      {
+        "id": 12,
+        "title": "Settlement Activity",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 30, "w": 12, "h": 6},
+        "targets": [
+          {
+            "expr": "rate(economic_settlements_total{result=\"success\"}[1m])",
+            "refId": "A",
+            "legendFormat": "Successful"
+          },
+          {
+            "expr": "rate(economic_settlements_total{result=\"failed\"}[1m])",
+            "refId": "B",
+            "legendFormat": "Failed"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line",
+              "fillOpacity": 30
+            },
+            "unit": "settlements/s"
+          }
+        }
+      },
+      {
+        "id": 13,
+        "title": "Dispute Rate",
+        "type": "timeseries",
+        "gridPos": {"x": 12, "y": 30, "w": 12, "h": 6},
+        "targets": [
+          {
+            "expr": "rate(economic_disputes_total{resolution=\"resolved\"}[5m])",
+            "refId": "A",
+            "legendFormat": "Resolved"
+          },
+          {
+            "expr": "rate(economic_disputes_total{resolution=\"pending\"}[5m])",
+            "refId": "B",
+            "legendFormat": "Pending"
+          },
+          {
+            "expr": "rate(economic_disputes_total{resolution=\"arbitrated\"}[5m])",
+            "refId": "C",
+            "legendFormat": "Arbitrated"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line",
+              "fillOpacity": 20
+            },
+            "unit": "disputes/s"
+          }
+        }
+      },
+      {
+        "id": 14,
+        "title": "Blacklist Events",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 36, "w": 12, "h": 6},
+        "targets": [
+          {
+            "expr": "rate(economic_blacklist_events_total{event_type=\"added\"}[5m])",
+            "refId": "A",
+            "legendFormat": "Added"
+          },
+          {
+            "expr": "rate(economic_blacklist_events_total{event_type=\"removed\"}[5m])",
+            "refId": "B",
+            "legendFormat": "Removed"
+          },
+          {
+            "expr": "rate(economic_blacklist_events_total{event_type=\"expired\"}[5m])",
+            "refId": "C",
+            "legendFormat": "Expired"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "bars",
+              "fillOpacity": 80
+            },
+            "unit": "events/s"
+          }
+        }
+      },
+      {
+        "id": 15,
+        "title": "Average Task Cost by Peer (Top 10 Most Active)",
+        "type": "bargauge",
+        "gridPos": {"x": 12, "y": 36, "w": 12, "h": 6},
+        "targets": [
+          {
+            "expr": "topk(10, economic_average_cost)",
+            "refId": "A",
+            "legendFormat": "{{peer_id}}"
+          }
+        ],
+        "options": {
+          "orientation": "horizontal",
+          "displayMode": "lcd"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "currencyUSD",
+            "decimals": 4,
+            "color": {"mode": "continuous-GrYlRd"}
+          }
+        }
+      },
+      {
+        "id": 16,
+        "title": "Transaction Throughput (TPS)",
+        "type": "timeseries",
+        "gridPos": {"x": 0, "y": 42, "w": 24, "h": 6},
+        "targets": [
+          {
+            "expr": "economic_transaction_throughput",
+            "refId": "A",
+            "legendFormat": "TPS"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line",
+              "fillOpacity": 30,
+              "gradientMode": "hue"
+            },
+            "unit": "tps",
+            "decimals": 2
+          }
+        }
+      }
+    ]
+  }
+}

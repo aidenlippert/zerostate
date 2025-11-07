@@ -1,11 +1,13 @@
-go 1.24
+go 1.24.10
 
 toolchain go1.24.10
 
 use (
+	./libs/economic
 	./libs/execution
 	./libs/guild
 	./libs/identity
+	./libs/metrics
 	./libs/p2p
 	./libs/payment
 	./libs/reputation

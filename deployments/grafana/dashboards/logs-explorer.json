@@ -1,0 +1,291 @@
+{
+  "dashboard": {
+    "title": "ZeroState - Logs Explorer",
+    "uid": "zerostate-logs",
+    "tags": ["zerostate", "logs", "loki"],
+    "timezone": "browser",
+    "schemaVersion": 38,
+    "refresh": "10s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "📊 Log Volume by Service",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "datasource": {"type": "loki", "uid": "loki"},
+        "targets": [
+          {
+            "expr": "sum by (service) (count_over_time({job=\"docker\"}[1m]))",
+            "refId": "A",
+            "legendFormat": "{{service}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "bars",
+              "fillOpacity": 50
+            },
+            "unit": "logs/min"
+          }
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "📈 Error Rate",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+        "datasource": {"type": "loki", "uid": "loki"},
+        "targets": [
+          {
+            "expr": "sum by (service) (count_over_time({job=\"docker\", level=\"error\"}[1m]))",
+            "refId": "A",
+            "legendFormat": "{{service}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "custom": {
+              "axisPlacement": "auto",
+              "fillOpacity": 10,
+              "lineWidth": 2
+            },
+            "unit": "errors/min"
+          }
+        },
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          }
+        }
+      },
+      {
+        "id": 3,
+        "title": "🔍 Recent Logs (All Services)",
+        "type": "logs",
+        "gridPos": {"h": 12, "w": 24, "x": 0, "y": 8},
+        "datasource": {"type": "loki", "uid": "loki"},
+        "targets": [
+          {
+            "expr": "{job=\"docker\"}",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "showTime": true,
+          "showLabels": true,
+          "showCommonLabels": false,
+          "wrapLogMessage": true,
+          "sortOrder": "Descending",
+          "dedupStrategy": "none",
+          "enableLogDetails": true
+        }
+      },
+      {
+        "id": 4,
+        "title": "❌ Error Logs",
+        "type": "logs",
+        "gridPos": {"h": 10, "w": 12, "x": 0, "y": 20},
+        "datasource": {"type": "loki", "uid": "loki"},
+        "targets": [
+          {
+            "expr": "{job=\"docker\", level=\"error\"}",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "showTime": true,
+          "showLabels": true,
+          "wrapLogMessage": true,
+          "sortOrder": "Descending"
+        }
+      },
+      {
+        "id": 5,
+        "title": "⚠️ Warning Logs",
+        "type": "logs",
+        "gridPos": {"h": 10, "w": 12, "x": 12, "y": 20},
+        "datasource": {"type": "loki", "uid": "loki"},
+        "targets": [
+          {
+            "expr": "{job=\"docker\", level=\"warn\"}",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "showTime": true,
+          "showLabels": true,
+          "wrapLogMessage": true,
+          "sortOrder": "Descending"
+        }
+      },
+      {
+        "id": 6,
+        "title": "🔗 Logs by Trace ID",
+        "type": "logs",
+        "gridPos": {"h": 10, "w": 24, "x": 0, "y": 30},
+        "datasource": {"type": "loki", "uid": "loki"},
+        "targets": [
+          {
+            "expr": "{job=\"docker\"} | json | trace_id!=\"\" | line_format \"{{.timestamp}} [{{.level}}] {{.service}}: {{.message}} (trace={{.trace_id}})\"",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "showTime": true,
+          "showLabels": false,
+          "wrapLogMessage": true,
+          "sortOrder": "Descending"
+        },
+        "description": "Logs with trace IDs - click trace ID to view in Jaeger"
+      },
+      {
+        "id": 7,
+        "title": "🎯 Log Level Distribution",
+        "type": "piechart",
+        "gridPos": {"h": 8, "w": 8, "x": 0, "y": 40},
+        "datasource": {"type": "loki", "uid": "loki"},
+        "targets": [
+          {
+            "expr": "sum by (level) (count_over_time({job=\"docker\"}[$__range]))",
+            "refId": "A",
+            "legendFormat": "{{level}}"
+          }
+        ],
+        "options": {
+          "legend": {
+            "displayMode": "table",
+            "placement": "right",
+            "values": ["value", "percent"]
+          },
+          "pieType": "donut"
+        }
+      },
+      {
+        "id": 8,
+        "title": "🏷️ Top Services by Log Volume",
+        "type": "bargauge",
+        "gridPos": {"h": 8, "w": 8, "x": 8, "y": 40},
+        "datasource": {"type": "loki", "uid": "loki"},
+        "targets": [
+          {
+            "expr": "topk(10, sum by (service) (count_over_time({job=\"docker\"}[$__range])))",
+            "refId": "A",
+            "legendFormat": "{{service}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "palette-classic"},
+            "unit": "logs"
+          }
+        },
+        "options": {
+          "orientation": "horizontal",
+          "displayMode": "gradient"
+        }
+      },
+      {
+        "id": 9,
+        "title": "🔥 Error Hotspots (Last Hour)",
+        "type": "table",
+        "gridPos": {"h": 8, "w": 8, "x": 16, "y": 40},
+        "datasource": {"type": "loki", "uid": "loki"},
+        "targets": [
+          {
+            "expr": "topk(10, sum by (service, operation) (count_over_time({job=\"docker\", level=\"error\"}[1h])))",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "align": "left"
+            }
+          },
+          "overrides": [
+            {
+              "matcher": {"id": "byName", "options": "Value"},
+              "properties": [
+                {
+                  "id": "displayName",
+                  "value": "Error Count"
+                },
+                {
+                  "id": "custom.align",
+                  "value": "right"
+                }
+              ]
+            }
+          ]
+        },
+        "options": {
+          "showHeader": true
+        }
+      },
+      {
+        "id": 10,
+        "title": "🔎 P2P Network Logs",
+        "type": "logs",
+        "gridPos": {"h": 10, "w": 8, "x": 0, "y": 48},
+        "datasource": {"type": "loki", "uid": "loki"},
+        "targets": [
+          {
+            "expr": "{job=\"docker\"} |~ \"p2p|connection|peer|dht|gossip\"",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "showTime": true,
+          "wrapLogMessage": true
+        }
+      },
+      {
+        "id": 11,
+        "title": "⚙️ Execution Logs",
+        "type": "logs",
+        "gridPos": {"h": 10, "w": 8, "x": 8, "y": 48},
+        "datasource": {"type": "loki", "uid": "loki"},
+        "targets": [
+          {
+            "expr": "{job=\"docker\"} |~ \"wasm|execution|task|guild\"",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "showTime": true,
+          "wrapLogMessage": true
+        }
+      },
+      {
+        "id": 12,
+        "title": "💰 Payment Logs",
+        "type": "logs",
+        "gridPos": {"h": 10, "w": 8, "x": 16, "y": 48},
+        "datasource": {"type": "loki", "uid": "loki"},
+        "targets": [
+          {
+            "expr": "{job=\"docker\"} |~ \"payment|channel|settlement|dispute\"",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "showTime": true,
+          "wrapLogMessage": true
+        }
+      }
+    ]
+  }
+}
