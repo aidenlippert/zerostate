@@ -56,6 +56,7 @@ type Node struct {
 	gossip          *GossipService
 	providerRefresh *ProviderRefresher
 	connPool        *ConnectionPool
+	healthMonitor   *HealthMonitor
 	config          *Config
 	logger          *zap.Logger
 	tracer          trace.Tracer
@@ -113,16 +114,20 @@ func NewNode(ctx context.Context, cfg *Config) (*Node, error) {
 	// Initialize connection pool
 	connPool := NewConnectionPool(ctx, h, nil, cfg.Logger)
 
+	// Initialize health monitor
+	healthMonitor := NewHealthMonitor(ctx, h, nil, cfg.Logger)
+
 	node := &Node{
-		host:     h,
-		config:   cfg,
-		logger:   cfg.Logger,
-		tracer:   tracer,
-		qtable:   routing.NewQTable(),
-		protocol: protocol,
-		flowCtrl: flowCtrl,
-		gossip:   gossip,
-		connPool: connPool,
+		host:          h,
+		config:        cfg,
+		logger:        cfg.Logger,
+		tracer:        tracer,
+		qtable:        routing.NewQTable(),
+		protocol:      protocol,
+		flowCtrl:      flowCtrl,
+		gossip:        gossip,
+		connPool:      connPool,
+		healthMonitor: healthMonitor,
 	}
 
 	cfg.Logger.Info("libp2p host created",
@@ -259,6 +264,11 @@ func (n *Node) Host() host.Host {
 // Close stops the P2P node
 func (n *Node) Close() error {
 	n.logger.Info("shutting down node")
+	if n.healthMonitor != nil {
+		if err := n.healthMonitor.Close(); err != nil {
+			n.logger.Error("error closing health monitor", zap.Error(err))
+		}
+	}
 	if n.connPool != nil {
 		if err := n.connPool.Close(); err != nil {
 			n.logger.Error("error closing connection pool", zap.Error(err))
@@ -334,6 +344,11 @@ func (n *Node) ProviderRefresh() *ProviderRefresher {
 // ConnectionPool returns the connection pool
 func (n *Node) ConnectionPool() *ConnectionPool {
 	return n.connPool
+}
+
+// HealthMonitor returns the health monitor
+func (n *Node) HealthMonitor() *HealthMonitor {
+	return n.healthMonitor
 }
 
 // multiaddrsToStrings converts multiaddrs to strings
