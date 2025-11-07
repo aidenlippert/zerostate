@@ -152,7 +152,7 @@ func (s *Server) setupRoutes() {
 	s.router.StaticFile("/submit-task", "./web/static/index.html")
 	s.router.StaticFile("/tasks", "./web/static/index.html")
 	s.router.StaticFile("/agents", "./web/static/index.html")
-	s.router.StaticFile("/metrics", "./web/static/index.html")
+	s.router.StaticFile("/dashboard", "./web/static/index.html")
 
 	// API v1 routes
 	v1 := s.router.Group("/api/v1")

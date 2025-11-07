@@ -624,7 +624,7 @@ const router = {
         '/': components.dashboard,
         '/submit-task': components.submitTask,
         '/tasks': components.tasks,
-        '/metrics': components.metrics,
+        '/dashboard': components.metrics,
     },
 
     async navigate(path) {
@@ -688,7 +688,7 @@ const router = {
             '/tasks': 'nav-tasks',
             '/submit-task': 'nav-tasks',
             '/agents': 'nav-agents',
-            '/metrics': 'nav-metrics'
+            '/dashboard': 'nav-metrics'
         };
 
         const activeId = navMap[currentPath];
