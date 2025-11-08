@@ -22,3 +22,4 @@ use (
 	./libs/validation
 )
 use ./libs/storage
+use ./libs/websocket

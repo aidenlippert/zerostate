@@ -213,6 +213,15 @@ func (s *Server) setupRoutes() {
 				orchestrator.GET("/health", s.handlers.GetOrchestratorHealth)
 			}
 
+			// WebSocket real-time updates
+			ws := protected.Group("/ws")
+			{
+				ws.GET("/connect", s.handlers.HandleWebSocket)
+				ws.GET("/stats", s.handlers.GetWebSocketStats)
+				ws.POST("/broadcast", s.handlers.BroadcastMessage)
+				ws.POST("/send", s.handlers.SendUserMessage)
+			}
+
 			// Deployment management
 			deployments := protected.Group("/deployments")
 			{

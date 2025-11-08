@@ -15,6 +15,7 @@ import (
 	"github.com/aidenlippert/zerostate/libs/orchestration"
 	"github.com/aidenlippert/zerostate/libs/search"
 	"github.com/aidenlippert/zerostate/libs/storage"
+	"github.com/aidenlippert/zerostate/libs/websocket"
 	"github.com/libp2p/go-libp2p"
 	"go.uber.org/zap"
 )
@@ -140,9 +141,16 @@ func main() {
 		logger.Info("S3 storage not configured (set S3_BUCKET env var to enable)")
 	}
 
+	// Initialize WebSocket hub
+	logger.Info("initializing WebSocket hub")
+	wsHub := websocket.NewHub(ctx, logger)
+	wsHub.Start()
+	defer wsHub.Stop()
+	logger.Info("WebSocket hub started")
+
 	// Initialize API handlers
 	logger.Info("initializing API handlers")
-	handlers := api.NewHandlers(ctx, logger, p2pHost, signer, hnsw, taskQueue, orch, db, s3Storage)
+	handlers := api.NewHandlers(ctx, logger, p2pHost, signer, hnsw, taskQueue, orch, db, s3Storage, wsHub)
 
 	// Create API server
 	logger.Info("creating API server")
