@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"time"
 
+	"github.com/aidenlippert/zerostate/libs/database"
 	"github.com/aidenlippert/zerostate/libs/identity"
 	"github.com/aidenlippert/zerostate/libs/search"
 	"github.com/gin-gonic/gin"
@@ -283,30 +285,110 @@ func (h *Handlers) GetAgent(c *gin.Context) {
 	agentID := c.Param("id")
 	logger := h.logger.With(zap.String("handler", "GetAgent"), zap.String("agent_id", agentID))
 
-	// Mock data for now - will be replaced with database query
-	agent := gin.H{
-		"id":          agentID,
-		"name":        "DataWeaver",
-		"description": "Advanced data analysis agent for ETL processing and database management",
-		"capabilities": []string{"data_analysis", "etl", "database"},
-		"status":      "active",
-		"price":       0.02,
-		"tasks_completed": 1200000,
-		"rating":      4.9,
-		"created_at":  time.Now().Add(-30 * 24 * time.Hour).Format(time.RFC3339),
-		"updated_at":  time.Now().Add(-1 * 24 * time.Hour).Format(time.RFC3339),
+	// Seed database if empty
+	if err := h.seedAgentsIfEmpty(); err != nil {
+		logger.Error("failed to seed agents", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "internal error",
+			"message": "failed to initialize agent data",
+		})
+		return
+	}
+
+	// Get agent from database
+	agent, err := h.db.GetAgentByID(agentID)
+	if err != nil {
+		logger.Error("failed to get agent", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "internal error",
+			"message": "failed to retrieve agent",
+		})
+		return
+	}
+
+	if agent == nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error":   "not found",
+			"message": "agent not found",
+		})
+		return
+	}
+
+	// Parse capabilities JSON
+	var capabilities []string
+	if err := json.Unmarshal([]byte(agent.Capabilities), &capabilities); err != nil {
+		logger.Error("failed to parse capabilities", zap.Error(err))
+		capabilities = []string{}
 	}
 
 	logger.Info("retrieved agent")
-	c.JSON(http.StatusOK, agent)
+	c.JSON(http.StatusOK, gin.H{
+		"id":              agent.ID,
+		"name":            agent.Name,
+		"description":     agent.Description,
+		"capabilities":    capabilities,
+		"status":          agent.Status,
+		"price":           agent.Price,
+		"tasks_completed": agent.TasksCompleted,
+		"rating":          agent.Rating,
+		"created_at":      agent.CreatedAt.Format(time.RFC3339),
+		"updated_at":      agent.UpdatedAt.Format(time.RFC3339),
+	})
 }
 
-// ListAgents lists all agents with pagination
-func (h *Handlers) ListAgents(c *gin.Context) {
-	logger := h.logger.With(zap.String("handler", "ListAgents"))
+// seedAgentsIfEmpty seeds the database with mock agents if empty
+func (h *Handlers) seedAgentsIfEmpty() error {
+	if h.db == nil {
+		// If no database, use mock data
+		return nil
+	}
 
-	// Mock data for now - will be replaced with database query
-	agents := []gin.H{
+	count, err := h.db.GetAgentCount()
+	if err != nil {
+		return fmt.Errorf("failed to get agent count: %w", err)
+	}
+
+	// Database already has agents
+	if count > 0 {
+		return nil
+	}
+
+	// Seed with mock agents
+	mockAgents := h.getMockAgents()
+	for _, mockAgent := range mockAgents {
+		// Marshal capabilities to JSON
+		capabilities, _ := json.Marshal(mockAgent["capabilities"])
+
+		// Parse time strings
+		createdAt, _ := time.Parse(time.RFC3339, mockAgent["created_at"].(string))
+		if createdAt.IsZero() {
+			createdAt = time.Now()
+		}
+
+		agent := &database.Agent{
+			ID:             mockAgent["id"].(string),
+			Name:           mockAgent["name"].(string),
+			Description:    mockAgent["description"].(string),
+			Capabilities:   string(capabilities),
+			Status:         mockAgent["status"].(string),
+			Price:          mockAgent["price"].(float64),
+			TasksCompleted: int64(mockAgent["tasks_completed"].(int)),
+			Rating:         mockAgent["rating"].(float64),
+			CreatedAt:      createdAt,
+			UpdatedAt:      time.Now(),
+		}
+
+		if err := h.db.CreateAgent(agent); err != nil {
+			return fmt.Errorf("failed to create agent %s: %w", agent.ID, err)
+		}
+	}
+
+	return nil
+}
+
+// getMockAgents returns mock agent data for testing
+func (h *Handlers) getMockAgents() []gin.H {
+	return []gin.H{
 		{
 			"id":          "agent_001",
 			"name":        "DataWeaver",
@@ -340,6 +422,186 @@ func (h *Handlers) ListAgents(c *gin.Context) {
 			"rating":      4.7,
 			"created_at":  time.Now().Add(-15 * 24 * time.Hour).Format(time.RFC3339),
 		},
+		{
+			"id":          "agent_004",
+			"name":        "Orchestrator Prime",
+			"description": "Meta-orchestration agent for complex multi-agent workflows",
+			"capabilities": []string{"orchestration", "workflow", "coordination"},
+			"status":      "active",
+			"price":       0.10,
+			"tasks_completed": 2100000,
+			"rating":      4.9,
+			"created_at":  time.Now().Add(-45 * 24 * time.Hour).Format(time.RFC3339),
+		},
+		{
+			"id":          "agent_005",
+			"name":        "Sentinel",
+			"description": "Security monitoring and threat detection specialist",
+			"capabilities": []string{"security", "monitoring", "threat_detection"},
+			"status":      "active",
+			"price":       50.00,
+			"tasks_completed": 720000,
+			"rating":      4.6,
+			"created_at":  time.Now().Add(-25 * 24 * time.Hour).Format(time.RFC3339),
+		},
+		{
+			"id":          "agent_006",
+			"name":        "Canvas AI",
+			"description": "Image generation and manipulation specialist using DALL-E",
+			"capabilities": []string{"image_gen", "design", "creative"},
+			"status":      "active",
+			"price":       0.25,
+			"tasks_completed": 950000,
+			"rating":      4.8,
+			"created_at":  time.Now().Add(-18 * 24 * time.Hour).Format(time.RFC3339),
+		},
+		{
+			"id":          "agent_007",
+			"name":        "TextCraft Pro",
+			"description": "NLP and content generation specialist powered by GPT-4",
+			"capabilities": []string{"nlp", "text_gen", "summarization"},
+			"status":      "active",
+			"price":       0.03,
+			"tasks_completed": 1800000,
+			"rating":      4.7,
+			"created_at":  time.Now().Add(-35 * 24 * time.Hour).Format(time.RFC3339),
+		},
+		{
+			"id":          "agent_008",
+			"name":        "VoiceForge",
+			"description": "Speech synthesis and voice cloning agent",
+			"capabilities": []string{"tts", "voice_clone", "audio"},
+			"status":      "active",
+			"price":       0.15,
+			"tasks_completed": 580000,
+			"rating":      4.5,
+			"created_at":  time.Now().Add(-12 * 24 * time.Hour).Format(time.RFC3339),
+		},
+		{
+			"id":          "agent_009",
+			"name":        "VideoMorph",
+			"description": "Video processing and editing automation specialist",
+			"capabilities": []string{"video_processing", "editing", "encoding"},
+			"status":      "active",
+			"price":       0.50,
+			"tasks_completed": 320000,
+			"rating":      4.6,
+			"created_at":  time.Now().Add(-22 * 24 * time.Hour).Format(time.RFC3339),
+		},
+		{
+			"id":          "agent_010",
+			"name":        "WebCrawler Elite",
+			"description": "Advanced web scraping and data extraction agent",
+			"capabilities": []string{"web_scraping", "data_extraction", "crawling"},
+			"status":      "active",
+			"price":       0.08,
+			"tasks_completed": 1100000,
+			"rating":      4.7,
+			"created_at":  time.Now().Add(-28 * 24 * time.Hour).Format(time.RFC3339),
+		},
+		{
+			"id":          "agent_011",
+			"name":        "ML Trainer",
+			"description": "Machine learning model training and optimization specialist",
+			"capabilities": []string{"ml_training", "optimization", "model_tuning"},
+			"status":      "active",
+			"price":       100.00,
+			"tasks_completed": 180000,
+			"rating":      4.8,
+			"created_at":  time.Now().Add(-40 * 24 * time.Hour).Format(time.RFC3339),
+		},
+		{
+			"id":          "agent_012",
+			"name":        "CloudSync Master",
+			"description": "Multi-cloud storage synchronization and backup agent",
+			"capabilities": []string{"cloud_storage", "backup", "sync"},
+			"status":      "active",
+			"price":       0.01,
+			"tasks_completed": 2500000,
+			"rating":      4.9,
+			"created_at":  time.Now().Add(-50 * 24 * time.Hour).Format(time.RFC3339),
+		},
+		{
+			"id":          "agent_013",
+			"name":        "BlockChain Oracle",
+			"description": "Blockchain interaction and smart contract deployment agent",
+			"capabilities": []string{"blockchain", "smart_contracts", "web3"},
+			"status":      "active",
+			"price":       0.20,
+			"tasks_completed": 420000,
+			"rating":      4.4,
+			"created_at":  time.Now().Add(-10 * 24 * time.Hour).Format(time.RFC3339),
+		},
+		{
+			"id":          "agent_014",
+			"name":        "Quantum Simulator",
+			"description": "Quantum algorithm simulation and optimization",
+			"capabilities": []string{"quantum", "simulation", "optimization"},
+			"status":      "beta",
+			"price":       5.00,
+			"tasks_completed": 85000,
+			"rating":      4.2,
+			"created_at":  time.Now().Add(-5 * 24 * time.Hour).Format(time.RFC3339),
+		},
+		{
+			"id":          "agent_015",
+			"name":        "DevOps Automator",
+			"description": "CI/CD pipeline automation and infrastructure as code specialist",
+			"capabilities": []string{"devops", "ci_cd", "infrastructure"},
+			"status":      "active",
+			"price":       0.12,
+			"tasks_completed": 980000,
+			"rating":      4.8,
+			"created_at":  time.Now().Add(-32 * 24 * time.Hour).Format(time.RFC3339),
+		},
+	}
+}
+
+// ListAgents lists all agents with pagination
+func (h *Handlers) ListAgents(c *gin.Context) {
+	logger := h.logger.With(zap.String("handler", "ListAgents"))
+
+	// Seed database if empty
+	if err := h.seedAgentsIfEmpty(); err != nil {
+		logger.Error("failed to seed agents", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "internal error",
+			"message": "failed to initialize agent data",
+		})
+		return
+	}
+
+	// Get agents from database
+	agentsFromDB, err := h.db.ListAgents()
+	if err != nil {
+		logger.Error("failed to list agents", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "internal error",
+			"message": "failed to retrieve agents",
+		})
+		return
+	}
+
+	// Convert database agents to response format
+	agents := make([]gin.H, 0, len(agentsFromDB))
+	for _, agent := range agentsFromDB {
+		var capabilities []string
+		if err := json.Unmarshal([]byte(agent.Capabilities), &capabilities); err != nil {
+			logger.Error("failed to parse capabilities", zap.Error(err))
+			capabilities = []string{}
+		}
+
+		agents = append(agents, gin.H{
+			"id":              agent.ID,
+			"name":            agent.Name,
+			"description":     agent.Description,
+			"capabilities":    capabilities,
+			"status":          agent.Status,
+			"price":           agent.Price,
+			"tasks_completed": agent.TasksCompleted,
+			"rating":          agent.Rating,
+			"created_at":      agent.CreatedAt.Format(time.RFC3339),
+		})
 	}
 
 	logger.Info("listing agents", zap.Int("count", len(agents)))
@@ -379,6 +641,8 @@ func (h *Handlers) DeleteAgent(c *gin.Context) {
 // SearchAgents searches for agents by capabilities
 func (h *Handlers) SearchAgents(c *gin.Context) {
 	query := c.Query("q")
+	logger := h.logger.With(zap.String("handler", "SearchAgents"), zap.String("query", query))
+
 	if query == "" {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":   "invalid request",
@@ -387,10 +651,61 @@ func (h *Handlers) SearchAgents(c *gin.Context) {
 		return
 	}
 
-	// TODO: Implement semantic search using HNSW index
-	c.JSON(http.StatusNotImplemented, gin.H{
-		"error":   "not implemented",
-		"message": "SearchAgents endpoint not yet implemented",
+	// Seed database if empty
+	if err := h.seedAgentsIfEmpty(); err != nil {
+		logger.Error("failed to seed agents", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "internal error",
+			"message": "failed to initialize agent data",
+		})
+		return
+	}
+
+	// For now, implement simple text matching on capabilities and names
+	// TODO: Use HNSW index for semantic search when embeddings are available
+	logger.Info("searching agents")
+
+	// Search agents in database
+	agentsFromDB, err := h.db.SearchAgents(query)
+	if err != nil {
+		logger.Error("failed to search agents", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "internal error",
+			"message": "failed to search agents",
+		})
+		return
+	}
+
+	// Convert database agents to response format
+	matchedAgents := make([]gin.H, 0, len(agentsFromDB))
+	for _, agent := range agentsFromDB {
+		var capabilities []string
+		if err := json.Unmarshal([]byte(agent.Capabilities), &capabilities); err != nil {
+			logger.Error("failed to parse capabilities", zap.Error(err))
+			capabilities = []string{}
+		}
+
+		matchedAgents = append(matchedAgents, gin.H{
+			"id":              agent.ID,
+			"name":            agent.Name,
+			"description":     agent.Description,
+			"capabilities":    capabilities,
+			"status":          agent.Status,
+			"price":           agent.Price,
+			"tasks_completed": agent.TasksCompleted,
+			"rating":          agent.Rating,
+			"created_at":      agent.CreatedAt.Format(time.RFC3339),
+		})
+	}
+
+	logger.Info("search completed",
+		zap.Int("matched", len(matchedAgents)),
+	)
+
+	c.JSON(http.StatusOK, gin.H{
+		"agents": matchedAgents,
+		"total":  len(matchedAgents),
+		"query":  query,
 	})
 }
 

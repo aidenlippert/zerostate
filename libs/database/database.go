@@ -26,6 +26,20 @@ type User struct {
 	UpdatedAt    time.Time `json:"updated_at"`
 }
 
+// Agent represents an agent in the database
+type Agent struct {
+	ID             string    `json:"id"`
+	Name           string    `json:"name"`
+	Description    string    `json:"description"`
+	Capabilities   string    `json:"capabilities"` // JSON array stored as string
+	Status         string    `json:"status"`
+	Price          float64   `json:"price"`
+	TasksCompleted int64     `json:"tasks_completed"`
+	Rating         float64   `json:"rating"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
+
 // NewDB creates a new database connection
 // Supports both SQLite (local dev) and PostgreSQL (production/Supabase)
 // Examples:
@@ -82,6 +96,22 @@ func (db *DB) initSchema() error {
 		);
 
 		CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+
+		CREATE TABLE IF NOT EXISTS agents (
+			id VARCHAR(255) PRIMARY KEY,
+			name VARCHAR(255) NOT NULL,
+			description TEXT NOT NULL,
+			capabilities TEXT NOT NULL,
+			status VARCHAR(50) NOT NULL DEFAULT 'active',
+			price DECIMAL(10,2) NOT NULL DEFAULT 0.0,
+			tasks_completed BIGINT NOT NULL DEFAULT 0,
+			rating DECIMAL(3,2) NOT NULL DEFAULT 0.0,
+			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status);
+		CREATE INDEX IF NOT EXISTS idx_agents_rating ON agents(rating);
 		`
 	} else {
 		schema = `
@@ -95,6 +125,22 @@ func (db *DB) initSchema() error {
 		);
 
 		CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+
+		CREATE TABLE IF NOT EXISTS agents (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL,
+			description TEXT NOT NULL,
+			capabilities TEXT NOT NULL,
+			status TEXT NOT NULL DEFAULT 'active',
+			price REAL NOT NULL DEFAULT 0.0,
+			tasks_completed INTEGER NOT NULL DEFAULT 0,
+			rating REAL NOT NULL DEFAULT 0.0,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status);
+		CREATE INDEX IF NOT EXISTS idx_agents_rating ON agents(rating);
 		`
 	}
 
@@ -249,4 +295,245 @@ func (db *DB) DeleteUser(id string) error {
 	}
 
 	return nil
+}
+
+// CreateAgent creates a new agent
+func (db *DB) CreateAgent(agent *Agent) error {
+	var query string
+	if db.driverName == "postgres" {
+		query = `
+			INSERT INTO agents (id, name, description, capabilities, status, price, tasks_completed, rating, created_at, updated_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		`
+	} else {
+		query = `
+			INSERT INTO agents (id, name, description, capabilities, status, price, tasks_completed, rating, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`
+	}
+
+	_, err := db.conn.Exec(
+		query,
+		agent.ID,
+		agent.Name,
+		agent.Description,
+		agent.Capabilities,
+		agent.Status,
+		agent.Price,
+		agent.TasksCompleted,
+		agent.Rating,
+		agent.CreatedAt,
+		agent.UpdatedAt,
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to create agent: %w", err)
+	}
+
+	return nil
+}
+
+// GetAgentByID retrieves an agent by ID
+func (db *DB) GetAgentByID(id string) (*Agent, error) {
+	var query string
+	if db.driverName == "postgres" {
+		query = `SELECT id, name, description, capabilities, status, price, tasks_completed, rating, created_at, updated_at FROM agents WHERE id = $1`
+	} else {
+		query = `SELECT id, name, description, capabilities, status, price, tasks_completed, rating, created_at, updated_at FROM agents WHERE id = ?`
+	}
+
+	agent := &Agent{}
+	err := db.conn.QueryRow(query, id).Scan(
+		&agent.ID,
+		&agent.Name,
+		&agent.Description,
+		&agent.Capabilities,
+		&agent.Status,
+		&agent.Price,
+		&agent.TasksCompleted,
+		&agent.Rating,
+		&agent.CreatedAt,
+		&agent.UpdatedAt,
+	)
+
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get agent: %w", err)
+	}
+
+	return agent, nil
+}
+
+// ListAgents retrieves all agents
+func (db *DB) ListAgents() ([]*Agent, error) {
+	var query string
+	if db.driverName == "postgres" {
+		query = `SELECT id, name, description, capabilities, status, price, tasks_completed, rating, created_at, updated_at FROM agents ORDER BY rating DESC, tasks_completed DESC`
+	} else {
+		query = `SELECT id, name, description, capabilities, status, price, tasks_completed, rating, created_at, updated_at FROM agents ORDER BY rating DESC, tasks_completed DESC`
+	}
+
+	rows, err := db.conn.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list agents: %w", err)
+	}
+	defer rows.Close()
+
+	var agents []*Agent
+	for rows.Next() {
+		agent := &Agent{}
+		err := rows.Scan(
+			&agent.ID,
+			&agent.Name,
+			&agent.Description,
+			&agent.Capabilities,
+			&agent.Status,
+			&agent.Price,
+			&agent.TasksCompleted,
+			&agent.Rating,
+			&agent.CreatedAt,
+			&agent.UpdatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan agent: %w", err)
+		}
+		agents = append(agents, agent)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating agents: %w", err)
+	}
+
+	return agents, nil
+}
+
+// SearchAgents searches for agents by query
+func (db *DB) SearchAgents(query string) ([]*Agent, error) {
+	var sqlQuery string
+	searchPattern := "%" + strings.ToLower(query) + "%"
+
+	if db.driverName == "postgres" {
+		sqlQuery = `
+			SELECT id, name, description, capabilities, status, price, tasks_completed, rating, created_at, updated_at
+			FROM agents
+			WHERE LOWER(name) LIKE $1
+			   OR LOWER(description) LIKE $1
+			   OR LOWER(capabilities) LIKE $1
+			ORDER BY rating DESC, tasks_completed DESC
+		`
+	} else {
+		sqlQuery = `
+			SELECT id, name, description, capabilities, status, price, tasks_completed, rating, created_at, updated_at
+			FROM agents
+			WHERE LOWER(name) LIKE ?
+			   OR LOWER(description) LIKE ?
+			   OR LOWER(capabilities) LIKE ?
+			ORDER BY rating DESC, tasks_completed DESC
+		`
+	}
+
+	var rows *sql.Rows
+	var err error
+
+	if db.driverName == "postgres" {
+		rows, err = db.conn.Query(sqlQuery, searchPattern)
+	} else {
+		rows, err = db.conn.Query(sqlQuery, searchPattern, searchPattern, searchPattern)
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to search agents: %w", err)
+	}
+	defer rows.Close()
+
+	var agents []*Agent
+	for rows.Next() {
+		agent := &Agent{}
+		err := rows.Scan(
+			&agent.ID,
+			&agent.Name,
+			&agent.Description,
+			&agent.Capabilities,
+			&agent.Status,
+			&agent.Price,
+			&agent.TasksCompleted,
+			&agent.Rating,
+			&agent.CreatedAt,
+			&agent.UpdatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan agent: %w", err)
+		}
+		agents = append(agents, agent)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating agents: %w", err)
+	}
+
+	return agents, nil
+}
+
+// UpdateAgent updates an agent
+func (db *DB) UpdateAgent(agent *Agent) error {
+	var query string
+	if db.driverName == "postgres" {
+		query = `UPDATE agents SET name = $1, description = $2, capabilities = $3, status = $4, price = $5, tasks_completed = $6, rating = $7, updated_at = $8 WHERE id = $9`
+	} else {
+		query = `UPDATE agents SET name = ?, description = ?, capabilities = ?, status = ?, price = ?, tasks_completed = ?, rating = ?, updated_at = ? WHERE id = ?`
+	}
+
+	agent.UpdatedAt = time.Now()
+
+	_, err := db.conn.Exec(
+		query,
+		agent.Name,
+		agent.Description,
+		agent.Capabilities,
+		agent.Status,
+		agent.Price,
+		agent.TasksCompleted,
+		agent.Rating,
+		agent.UpdatedAt,
+		agent.ID,
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to update agent: %w", err)
+	}
+
+	return nil
+}
+
+// DeleteAgent deletes an agent
+func (db *DB) DeleteAgent(id string) error {
+	var query string
+	if db.driverName == "postgres" {
+		query = `DELETE FROM agents WHERE id = $1`
+	} else {
+		query = `DELETE FROM agents WHERE id = ?`
+	}
+
+	_, err := db.conn.Exec(query, id)
+	if err != nil {
+		return fmt.Errorf("failed to delete agent: %w", err)
+	}
+
+	return nil
+}
+
+// GetAgentCount returns the number of agents in the database
+func (db *DB) GetAgentCount() (int64, error) {
+	var count int64
+	query := `SELECT COUNT(*) FROM agents`
+
+	err := db.conn.QueryRow(query).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count agents: %w", err)
+	}
+
+	return count, nil
 }
