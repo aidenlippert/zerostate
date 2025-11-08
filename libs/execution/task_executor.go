@@ -57,14 +57,15 @@ type Task struct {
 
 // TaskResult represents the result of task execution
 type TaskResult struct {
-	TaskID    string
-	AgentID   string
-	ExitCode  int
-	Stdout    []byte
-	Stderr    []byte
-	Duration  time.Duration
-	Error     string
-	CreatedAt time.Time
+	TaskID     string
+	AgentID    string
+	ExitCode   int
+	Stdout     []byte
+	Stderr     []byte
+	Duration   time.Duration
+	DurationMs int64  // Duration in milliseconds for database storage
+	Error      string
+	CreatedAt  time.Time
 }
 
 // NewTaskExecutor creates a new task executor

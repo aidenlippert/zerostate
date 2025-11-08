@@ -179,7 +179,7 @@ func main() {
 
 	// Initialize API handlers
 	logger.Info("initializing API handlers")
-	handlers := api.NewHandlers(ctx, logger, p2pHost, signer, hnsw, taskQueue, orch, db, s3Storage, wsHub)
+	handlers := api.NewHandlers(ctx, logger, p2pHost, signer, hnsw, taskQueue, orch, db, s3Storage, wsHub, wasmRunner, resultStore, binaryStore)
 
 	// Create API server
 	logger.Info("creating API server")

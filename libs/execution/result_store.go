@@ -125,6 +125,91 @@ func (s *PostgresResultStore) GetResult(ctx context.Context, taskID string) (*Ta
 	return &result, nil
 }
 
+// ListResults retrieves task results with optional filtering
+func (s *PostgresResultStore) ListResults(ctx context.Context, agentID string, limit string, offset string) ([]*TaskResult, error) {
+	var query string
+	var args []interface{}
+
+	if agentID != "" {
+		query = `
+			SELECT
+				task_id,
+				agent_id,
+				exit_code,
+				stdout,
+				stderr,
+				duration_ms,
+				error,
+				created_at
+			FROM task_results
+			WHERE agent_id = $1
+			ORDER BY created_at DESC
+			LIMIT $2 OFFSET $3
+		`
+		args = []interface{}{agentID, limit, offset}
+	} else {
+		query = `
+			SELECT
+				task_id,
+				agent_id,
+				exit_code,
+				stdout,
+				stderr,
+				duration_ms,
+				error,
+				created_at
+			FROM task_results
+			ORDER BY created_at DESC
+			LIMIT $1 OFFSET $2
+		`
+		args = []interface{}{limit, offset}
+	}
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		s.logger.Error("failed to list task results", zap.Error(err))
+		return nil, fmt.Errorf("failed to list results: %w", err)
+	}
+	defer rows.Close()
+
+	var results []*TaskResult
+	for rows.Next() {
+		var result TaskResult
+		var durationMs int64
+		var errorStr sql.NullString
+
+		err := rows.Scan(
+			&result.TaskID,
+			&result.AgentID,
+			&result.ExitCode,
+			&result.Stdout,
+			&result.Stderr,
+			&durationMs,
+			&errorStr,
+			&result.CreatedAt,
+		)
+		if err != nil {
+			s.logger.Error("failed to scan result row", zap.Error(err))
+			continue
+		}
+
+		result.Duration = time.Duration(durationMs) * time.Millisecond
+		result.DurationMs = durationMs
+		if errorStr.Valid {
+			result.Error = errorStr.String
+		}
+
+		results = append(results, &result)
+	}
+
+	if err := rows.Err(); err != nil {
+		s.logger.Error("error iterating results", zap.Error(err))
+		return nil, fmt.Errorf("failed to iterate results: %w", err)
+	}
+
+	return results, nil
+}
+
 // InitResultsTable creates the task_results table if it doesn't exist
 func (s *PostgresResultStore) InitResultsTable(ctx context.Context) error {
 	query := `

@@ -204,6 +204,11 @@ func (s *Server) setupRoutes() {
 				tasks.DELETE("/:id", s.handlers.CancelTask)
 				tasks.GET("/:id/status", s.handlers.GetTaskStatus)
 				tasks.GET("/:id/result", s.handlers.GetTaskResult)
+
+				// Direct task execution (Sprint 9)
+				tasks.POST("/execute", s.handlers.ExecuteTaskDirect)
+				tasks.GET("/:id/results", s.handlers.GetTaskResult)
+				tasks.GET("/results", s.handlers.ListTaskResults)
 			}
 
 			// Orchestrator monitoring
