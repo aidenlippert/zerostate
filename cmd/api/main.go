@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/aidenlippert/zerostate/libs/api"
+	"github.com/aidenlippert/zerostate/libs/database"
 	"github.com/aidenlippert/zerostate/libs/identity"
 	"github.com/aidenlippert/zerostate/libs/orchestration"
 	"github.com/aidenlippert/zerostate/libs/search"
@@ -69,6 +70,15 @@ func main() {
 	}
 	logger.Info("identity signer initialized", zap.String("did", signer.DID()))
 
+	// Initialize database
+	logger.Info("initializing database")
+	db, err := database.NewDB("./zerostate.db")
+	if err != nil {
+		logger.Fatal("failed to initialize database", zap.Error(err))
+	}
+	defer db.Close()
+	logger.Info("database initialized")
+
 	// Initialize HNSW index for agent discovery
 	logger.Info("initializing HNSW index")
 	hnsw := search.NewHNSWIndex(16, 200)
@@ -101,7 +111,7 @@ func main() {
 
 	// Initialize API handlers
 	logger.Info("initializing API handlers")
-	handlers := api.NewHandlers(ctx, logger, p2pHost, signer, hnsw, taskQueue, orch)
+	handlers := api.NewHandlers(ctx, logger, p2pHost, signer, hnsw, taskQueue, orch, db)
 
 	// Create API server
 	logger.Info("creating API server")

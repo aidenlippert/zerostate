@@ -146,6 +146,8 @@ require (
 
 replace (
 	github.com/aidenlippert/zerostate/libs/api => ../../libs/api
+	github.com/aidenlippert/zerostate/libs/auth => ../../libs/auth
+	github.com/aidenlippert/zerostate/libs/database => ../../libs/database
 	github.com/aidenlippert/zerostate/libs/execution => ../../libs/execution
 	github.com/aidenlippert/zerostate/libs/identity => ../../libs/identity
 	github.com/aidenlippert/zerostate/libs/orchestration => ../../libs/orchestration

@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Agents - ZeroState</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Sora:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet">
+    <style>
+        * {
+            font-family: 'Space Grotesk', sans-serif;
+        }
+        h1, h2, h3, h4, h5, h6 {
+            font-family: 'Sora', sans-serif;
+        }
+    </style>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#6366F1',
+                        secondary: '#8B5CF6',
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 min-h-screen text-white">
+    <!-- Navigation Header -->
+    <header class="sticky top-0 z-50 bg-gray-900/80 backdrop-blur-xl border-b border-white/10">
+        <div class="max-w-7xl mx-auto px-6 py-4">
+            <div class="flex items-center justify-between">
+                <!-- Logo -->
+                <div class="flex items-center gap-8">
+                    <a href="/" class="text-2xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+                        ZeroState
+                    </a>
+                    <!-- Nav Links -->
+                    <nav class="hidden md:flex items-center gap-6">
+                        <a href="/dashboard.html" class="text-gray-300 hover:text-white transition-colors">Dashboard</a>
+                        <a href="/agents.html" class="text-white font-semibold border-b-2 border-primary pb-1">Agents</a>
+                        <a href="/tasks.html" class="text-gray-300 hover:text-white transition-colors">Tasks</a>
+                        <a href="/analytics.html" class="text-gray-300 hover:text-white transition-colors">Analytics</a>
+                        <a href="/api-keys.html" class="text-gray-300 hover:text-white transition-colors">API Keys</a>
+                    </nav>
+                </div>
+                <!-- User Menu -->
+                <div class="flex items-center gap-4">
+                    <button class="p-2 hover:bg-white/5 rounded-lg transition-colors">
+                        <span class="material-symbols-outlined">notifications</span>
+                    </button>
+                    <button class="flex items-center gap-2 p-2 hover:bg-white/5 rounded-lg transition-colors">
+                        <div class="w-8 h-8 rounded-full bg-gradient-to-r from-primary to-secondary flex items-center justify-center text-sm font-semibold">
+                            JD
+                        </div>
+                        <span class="material-symbols-outlined text-sm">expand_more</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-6 py-8">
+        <!-- Page Header -->
+        <div class="flex items-center justify-between mb-8">
+            <div>
+                <h1 class="text-4xl font-bold mb-2">My Agents</h1>
+                <p class="text-gray-400">Manage and monitor your AI agents</p>
+            </div>
+            <button class="bg-gradient-to-r from-primary to-secondary text-white px-6 py-3 rounded-xl font-semibold hover:opacity-90 transition-opacity shadow-lg shadow-primary/25 flex items-center gap-2">
+                <span class="material-symbols-outlined">add</span>
+                Deploy New Agent
+            </button>
+        </div>
+
+        <!-- Stats Overview -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <div class="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-gray-400 text-sm">Total Agents</span>
+                    <span class="material-symbols-outlined text-primary">smart_toy</span>
+                </div>
+                <div class="text-3xl font-bold">24</div>
+                <div class="text-green-400 text-sm mt-2">↑ 3 this week</div>
+            </div>
+            <div class="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-gray-400 text-sm">Active Now</span>
+                    <span class="material-symbols-outlined text-green-400">check_circle</span>
+                </div>
+                <div class="text-3xl font-bold">18</div>
+                <div class="text-gray-400 text-sm mt-2">75% uptime</div>
+            </div>
+            <div class="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-gray-400 text-sm">Tasks Today</span>
+                    <span class="material-symbols-outlined text-blue-400">assignment</span>
+                </div>
+                <div class="text-3xl font-bold">142</div>
+                <div class="text-green-400 text-sm mt-2">↑ 12% vs yesterday</div>
+            </div>
+            <div class="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-gray-400 text-sm">Avg Success Rate</span>
+                    <span class="material-symbols-outlined text-purple-400">trending_up</span>
+                </div>
+                <div class="text-3xl font-bold">94.2%</div>
+                <div class="text-green-400 text-sm mt-2">↑ 2.1% improvement</div>
+            </div>
+        </div>
+
+        <!-- Filters and Search -->
+        <div class="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 mb-6">
+            <div class="flex flex-col md:flex-row gap-4">
+                <!-- Search -->
+                <div class="flex-1 relative">
+                    <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-gray-500">search</span>
+                    <input
+                        type="text"
+                        placeholder="Search agents by name, ID, or capability..."
+                        class="w-full pl-12 pr-4 py-3 bg-white/5 border border-gray-700 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+                    />
+                </div>
+                <!-- Status Filter -->
+                <select class="px-4 py-3 bg-white/5 border border-gray-700 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all cursor-pointer">
+                    <option value="">All Statuses</option>
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                    <option value="error">Error</option>
+                </select>
+                <!-- Sort -->
+                <select class="px-4 py-3 bg-white/5 border border-gray-700 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all cursor-pointer">
+                    <option value="recent">Most Recent</option>
+                    <option value="name">Name (A-Z)</option>
+                    <option value="tasks">Most Tasks</option>
+                    <option value="success">Success Rate</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Agents Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+            <!-- Agent Card 1 -->
+            <div class="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 hover:bg-white/10 transition-all group cursor-pointer">
+                <div class="flex items-start justify-between mb-4">
+                    <div class="flex items-center gap-3">
+                        <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center">
+                            <span class="material-symbols-outlined text-white">psychology</span>
+                        </div>
+                        <div>
+                            <h3 class="font-semibold text-lg">NLP Analyzer</h3>
+                            <p class="text-gray-500 text-sm">agent-nlp-001</p>
+                        </div>
+                    </div>
+                    <span class="px-3 py-1 bg-green-500/20 text-green-400 rounded-full text-xs font-medium flex items-center gap-1">
+                        <span class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
+                        Active
+                    </span>
+                </div>
+
+                <div class="space-y-3 mb-4">
+                    <div class="flex items-center justify-between text-sm">
+                        <span class="text-gray-400">Tasks Completed</span>
+                        <span class="font-semibold">1,284</span>
+                    </div>
+                    <div class="flex items-center justify-between text-sm">
+                        <span class="text-gray-400">Success Rate</span>
+                        <span class="font-semibold text-green-400">96.8%</span>
+                    </div>
+                    <div class="flex items-center justify-between text-sm">
+                        <span class="text-gray-400">Last Active</span>
+                        <span class="font-semibold">2 min ago</span>
+                    </div>
+                </div>
+
+                <div class="flex flex-wrap gap-2 mb-4">
+                    <span class="px-2 py-1 bg-primary/20 text-primary rounded text-xs">NLP</span>
+                    <span class="px-2 py-1 bg-primary/20 text-primary rounded text-xs">Sentiment</span>
+                    <span class="px-2 py-1 bg-primary/20 text-primary rounded text-xs">Text Analysis</span>
+                </div>
+
+                <div class="flex gap-2">
+                    <button class="flex-1 py-2 bg-primary/20 text-primary rounded-lg hover:bg-primary/30 transition-colors flex items-center justify-center gap-1 text-sm font-medium">
+                        <span class="material-symbols-outlined text-sm">visibility</span>
+                        View
+                    </button>
+                    <button class="flex-1 py-2 bg-white/5 text-gray-300 rounded-lg hover:bg-white/10 transition-colors flex items-center justify-center gap-1 text-sm font-medium">
+                        <span class="material-symbols-outlined text-sm">edit</span>
+                        Edit
+                    </button>
+                    <button class="py-2 px-3 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors">
+                        <span class="material-symbols-outlined text-sm">delete</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Agent Card 2 -->
+            <div class="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 hover:bg-white/10 transition-all group cursor-pointer">
+                <div class="flex items-start justify-between mb-4">
+                    <div class="flex items-center gap-3">
+                        <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center">
+                            <span class="material-symbols-outlined text-white">auto_awesome</span>
+                        </div>
+                        <div>
+                            <h3 class="font-semibold text-lg">Image Classifier</h3>
+                            <p class="text-gray-500 text-sm">agent-img-003</p>
+                        </div>
+                    </div>
+                    <span class="px-3 py-1 bg-green-500/20 text-green-400 rounded-full text-xs font-medium flex items-center gap-1">
+                        <span class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
+                        Active
+                    </span>
+                </div>
+
+                <div class="space-y-3 mb-4">
+                    <div class="flex items-center justify-between text-sm">
+                        <span class="text-gray-400">Tasks Completed</span>
+                        <span class="font-semibold">892</span>
+                    </div>
+                    <div class="flex items-center justify-between text-sm">
+                        <span class="text-gray-400">Success Rate</span>
+                        <span class="font-semibold text-green-400">98.3%</span>
+                    </div>
+                    <div class="flex items-center justify-between text-sm">
+                        <span class="text-gray-400">Last Active</span>
+                        <span class="font-semibold">5 min ago</span>
+                    </div>
+                </div>
+
+                <div class="flex flex-wrap gap-2 mb-4">
+                    <span class="px-2 py-1 bg-primary/20 text-primary rounded text-xs">Vision</span>
+                    <span class="px-2 py-1 bg-primary/20 text-primary rounded text-xs">Classification</span>
+                    <span class="px-2 py-1 bg-primary/20 text-primary rounded text-xs">ML</span>
+                </div>
+
+                <div class="flex gap-2">
+                    <button class="flex-1 py-2 bg-primary/20 text-primary rounded-lg hover:bg-primary/30 transition-colors flex items-center justify-center gap-1 text-sm font-medium">
+                        <span class="material-symbols-outlined text-sm">visibility</span>
+                        View
+                    </button>
+                    <button class="flex-1 py-2 bg-white/5 text-gray-300 rounded-lg hover:bg-white/10 transition-colors flex items-center justify-center gap-1 text-sm font-medium">
+                        <span class="material-symbols-outlined text-sm">edit</span>
+                        Edit
+                    </button>
+                    <button class="py-2 px-3 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors">
+                        <span class="material-symbols-outlined text-sm">delete</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Agent Card 3 -->
+            <div class="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 hover:bg-white/10 transition-all group cursor-pointer">
+                <div class="flex items-start justify-between mb-4">
+                    <div class="flex items-center gap-3">
+                        <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center">
+                            <span class="material-symbols-outlined text-white">data_object</span>
+                        </div>
+                        <div>
+                            <h3 class="font-semibold text-lg">Data Processor</h3>
+                            <p class="text-gray-500 text-sm">agent-data-007</p>
+                        </div>
+                    </div>
+                    <span class="px-3 py-1 bg-gray-500/20 text-gray-400 rounded-full text-xs font-medium">
+                        Inactive
+                    </span>
+                </div>
+
+                <div class="space-y-3 mb-4">
+                    <div class="flex items-center justify-between text-sm">
+                        <span class="text-gray-400">Tasks Completed</span>
+                        <span class="font-semibold">2,156</span>
+                    </div>
+                    <div class="flex items-center justify-between text-sm">
+                        <span class="text-gray-400">Success Rate</span>
+                        <span class="font-semibold text-green-400">92.4%</span>
+                    </div>
+                    <div class="flex items-center justify-between text-sm">
+                        <span class="text-gray-400">Last Active</span>
+                        <span class="font-semibold">2 days ago</span>
+                    </div>
+                </div>
+
+                <div class="flex flex-wrap gap-2 mb-4">
+                    <span class="px-2 py-1 bg-primary/20 text-primary rounded text-xs">ETL</span>
+                    <span class="px-2 py-1 bg-primary/20 text-primary rounded text-xs">Transform</span>
+                    <span class="px-2 py-1 bg-primary/20 text-primary rounded text-xs">Analytics</span>
+                </div>
+
+                <div class="flex gap-2">
+                    <button class="flex-1 py-2 bg-primary/20 text-primary rounded-lg hover:bg-primary/30 transition-colors flex items-center justify-center gap-1 text-sm font-medium">
+                        <span class="material-symbols-outlined text-sm">visibility</span>
+                        View
+                    </button>
+                    <button class="flex-1 py-2 bg-white/5 text-gray-300 rounded-lg hover:bg-white/10 transition-colors flex items-center justify-center gap-1 text-sm font-medium">
+                        <span class="material-symbols-outlined text-sm">edit</span>
+                        Edit
+                    </button>
+                    <button class="py-2 px-3 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors">
+                        <span class="material-symbols-outlined text-sm">delete</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Agent Card 4 -->
+            <div class="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 hover:bg-white/10 transition-all group cursor-pointer">
+                <div class="flex items-start justify-between mb-4">
+                    <div class="flex items-center gap-3">
+                        <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+                            <span class="material-symbols-outlined text-white">translate</span>
+                        </div>
+                        <div>
+                            <h3 class="font-semibold text-lg">Translator Pro</h3>
+                            <p class="text-gray-500 text-sm">agent-lang-012</p>
+                        </div>
+                    </div>
+                    <span class="px-3 py-1 bg-green-500/20 text-green-400 rounded-full text-xs font-medium flex items-center gap-1">
+                        <span class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
+                        Active
+                    </span>
+                </div>
+
+                <div class="space-y-3 mb-4">
+                    <div class="flex items-center justify-between text-sm">
+                        <span class="text-gray-400">Tasks Completed</span>
+                        <span class="font-semibold">3,421</span>
+                    </div>
+                    <div class="flex items-center justify-between text-sm">
+                        <span class="text-gray-400">Success Rate</span>
+                        <span class="font-semibold text-green-400">99.1%</span>
+                    </div>
+                    <div class="flex items-center justify-between text-sm">
+                        <span class="text-gray-400">Last Active</span>
+                        <span class="font-semibold">1 min ago</span>
+                    </div>
+                </div>
+
+                <div class="flex flex-wrap gap-2 mb-4">
+                    <span class="px-2 py-1 bg-primary/20 text-primary rounded text-xs">Translation</span>
+                    <span class="px-2 py-1 bg-primary/20 text-primary rounded text-xs">NLP</span>
+                    <span class="px-2 py-1 bg-primary/20 text-primary rounded text-xs">Multilingual</span>
+                </div>
+
+                <div class="flex gap-2">
+                    <button class="flex-1 py-2 bg-primary/20 text-primary rounded-lg hover:bg-primary/30 transition-colors flex items-center justify-center gap-1 text-sm font-medium">
+                        <span class="material-symbols-outlined text-sm">visibility</span>
+                        View
+                    </button>
+                    <button class="flex-1 py-2 bg-white/5 text-gray-300 rounded-lg hover:bg-white/10 transition-colors flex items-center justify-center gap-1 text-sm font-medium">
+                        <span class="material-symbols-outlined text-sm">edit</span>
+                        Edit
+                    </button>
+                    <button class="py-2 px-3 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors">
+                        <span class="material-symbols-outlined text-sm">delete</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Agent Card 5 -->
+            <div class="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 hover:bg-white/10 transition-all group cursor-pointer">
+                <div class="flex items-start justify-between mb-4">
+                    <div class="flex items-center gap-3">
+                        <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center">
+                            <span class="material-symbols-outlined text-white">code</span>
+                        </div>
+                        <div>
+                            <h3 class="font-semibold text-lg">Code Reviewer</h3>
+                            <p class="text-gray-500 text-sm">agent-dev-015</p>
+                        </div>
+                    </div>
+                    <span class="px-3 py-1 bg-green-500/20 text-green-400 rounded-full text-xs font-medium flex items-center gap-1">
+                        <span class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
+                        Active
+                    </span>
+                </div>
+
+                <div class="space-y-3 mb-4">
+                    <div class="flex items-center justify-between text-sm">
+                        <span class="text-gray-400">Tasks Completed</span>
+                        <span class="font-semibold">567</span>
+                    </div>
+                    <div class="flex items-center justify-between text-sm">
+                        <span class="text-gray-400">Success Rate</span>
+                        <span class="font-semibold text-green-400">95.7%</span>
+                    </div>
+                    <div class="flex items-center justify-between text-sm">
+                        <span class="text-gray-400">Last Active</span>
+                        <span class="font-semibold">12 min ago</span>
+                    </div>
+                </div>
+
+                <div class="flex flex-wrap gap-2 mb-4">
+                    <span class="px-2 py-1 bg-primary/20 text-primary rounded text-xs">Code Analysis</span>
+                    <span class="px-2 py-1 bg-primary/20 text-primary rounded text-xs">Review</span>
+                    <span class="px-2 py-1 bg-primary/20 text-primary rounded text-xs">Quality</span>
+                </div>
+
+                <div class="flex gap-2">
+                    <button class="flex-1 py-2 bg-primary/20 text-primary rounded-lg hover:bg-primary/30 transition-colors flex items-center justify-center gap-1 text-sm font-medium">
+                        <span class="material-symbols-outlined text-sm">visibility</span>
+                        View
+                    </button>
+                    <button class="flex-1 py-2 bg-white/5 text-gray-300 rounded-lg hover:bg-white/10 transition-colors flex items-center justify-center gap-1 text-sm font-medium">
+                        <span class="material-symbols-outlined text-sm">edit</span>
+                        Edit
+                    </button>
+                    <button class="py-2 px-3 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors">
+                        <span class="material-symbols-outlined text-sm">delete</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Agent Card 6 - Error State -->
+            <div class="bg-white/5 backdrop-blur-xl border border-red-500/20 rounded-2xl p-6 hover:bg-white/10 transition-all group cursor-pointer">
+                <div class="flex items-start justify-between mb-4">
+                    <div class="flex items-center gap-3">
+                        <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-red-500 to-orange-500 flex items-center justify-center">
+                            <span class="material-symbols-outlined text-white">bug_report</span>
+                        </div>
+                        <div>
+                            <h3 class="font-semibold text-lg">Debug Assistant</h3>
+                            <p class="text-gray-500 text-sm">agent-dbg-020</p>
+                        </div>
+                    </div>
+                    <span class="px-3 py-1 bg-red-500/20 text-red-400 rounded-full text-xs font-medium flex items-center gap-1">
+                        <span class="w-2 h-2 rounded-full bg-red-400 animate-pulse"></span>
+                        Error
+                    </span>
+                </div>
+
+                <div class="space-y-3 mb-4">
+                    <div class="flex items-center justify-between text-sm">
+                        <span class="text-gray-400">Tasks Completed</span>
+                        <span class="font-semibold">1,891</span>
+                    </div>
+                    <div class="flex items-center justify-between text-sm">
+                        <span class="text-gray-400">Success Rate</span>
+                        <span class="font-semibold text-yellow-400">88.2%</span>
+                    </div>
+                    <div class="flex items-center justify-between text-sm">
+                        <span class="text-gray-400">Last Active</span>
+                        <span class="font-semibold">1 hour ago</span>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-2 mb-4 p-2 bg-red-500/10 rounded-lg border border-red-500/20">
+                    <span class="material-symbols-outlined text-red-400 text-sm">error</span>
+                    <span class="text-red-400 text-xs">Connection timeout - retrying...</span>
+                </div>
+
+                <div class="flex gap-2">
+                    <button class="flex-1 py-2 bg-primary/20 text-primary rounded-lg hover:bg-primary/30 transition-colors flex items-center justify-center gap-1 text-sm font-medium">
+                        <span class="material-symbols-outlined text-sm">visibility</span>
+                        View
+                    </button>
+                    <button class="flex-1 py-2 bg-orange-500/20 text-orange-400 rounded-lg hover:bg-orange-500/30 transition-colors flex items-center justify-center gap-1 text-sm font-medium">
+                        <span class="material-symbols-outlined text-sm">refresh</span>
+                        Restart
+                    </button>
+                    <button class="py-2 px-3 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors">
+                        <span class="material-symbols-outlined text-sm">delete</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pagination -->
+        <div class="flex items-center justify-between bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6">
+            <div class="text-gray-400 text-sm">
+                Showing <span class="text-white font-semibold">1-6</span> of <span class="text-white font-semibold">24</span> agents
+            </div>
+            <div class="flex items-center gap-2">
+                <button class="px-4 py-2 bg-white/5 border border-gray-700 rounded-lg hover:bg-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                    <span class="material-symbols-outlined text-sm">chevron_left</span>
+                </button>
+                <button class="px-4 py-2 bg-primary text-white rounded-lg font-semibold">1</button>
+                <button class="px-4 py-2 bg-white/5 border border-gray-700 rounded-lg hover:bg-white/10 transition-colors">2</button>
+                <button class="px-4 py-2 bg-white/5 border border-gray-700 rounded-lg hover:bg-white/10 transition-colors">3</button>
+                <button class="px-4 py-2 bg-white/5 border border-gray-700 rounded-lg hover:bg-white/10 transition-colors">4</button>
+                <button class="px-4 py-2 bg-white/5 border border-gray-700 rounded-lg hover:bg-white/10 transition-colors">
+                    <span class="material-symbols-outlined text-sm">chevron_right</span>
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // TODO: Load agents from backend API
+        // TODO: Implement search functionality
+        // TODO: Implement filter and sort
+        // TODO: Implement delete confirmation modal
+        // TODO: Add real-time status updates via WebSocket
+    </script>
+</body>
+</html>

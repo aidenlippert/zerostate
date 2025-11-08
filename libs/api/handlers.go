@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 
+	"github.com/aidenlippert/zerostate/libs/database"
 	"github.com/aidenlippert/zerostate/libs/identity"
 	"github.com/aidenlippert/zerostate/libs/orchestration"
 	"github.com/aidenlippert/zerostate/libs/search"
@@ -19,6 +20,7 @@ type Handlers struct {
 	hnsw         *search.HNSWIndex
 	taskQueue    *orchestration.TaskQueue
 	orchestrator *orchestration.Orchestrator
+	db           *database.DB
 
 	// Services (to be added)
 	// userManager    *auth.UserManager
@@ -36,6 +38,7 @@ func NewHandlers(
 	hnsw *search.HNSWIndex,
 	taskQueue *orchestration.TaskQueue,
 	orchestrator *orchestration.Orchestrator,
+	db *database.DB,
 ) *Handlers {
 	if logger == nil {
 		logger = zap.NewNop()
@@ -48,6 +51,7 @@ func NewHandlers(
 		hnsw:         hnsw,
 		taskQueue:    taskQueue,
 		orchestrator: orchestrator,
+		db:           db,
 		ctx:          ctx,
 	}
 }

@@ -1,727 +1,668 @@
-// ZeroState Platform - Frontend Application
-// API Configuration
+// ZeroState Frontend Application
+// Client-side SPA with routing, authentication, and API integration
+
+// ======================
+// Configuration
+// ======================
 const API_BASE_URL = window.location.origin + '/api/v1';
+const AUTH_TOKEN_KEY = 'zerostate_auth_token';
+const USER_DATA_KEY = 'zerostate_user_data';
 
-// State Management
-const state = {
-    tasks: [],
-    agents: [],
-    metrics: null,
-    currentPage: 'dashboard'
-};
+// ======================
+// Authentication Manager
+// ======================
+class AuthManager {
+    constructor() {
+        this.token = localStorage.getItem(AUTH_TOKEN_KEY);
+        this.userData = JSON.parse(localStorage.getItem(USER_DATA_KEY) || 'null');
+    }
 
+    isAuthenticated() {
+        return !!this.token;
+    }
+
+    getToken() {
+        return this.token;
+    }
+
+    getUserData() {
+        return this.userData;
+    }
+
+    async login(email, password) {
+        try {
+            const response = await fetch(`${API_BASE_URL}/users/login`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ email, password }),
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.message || 'Login failed');
+            }
+
+            const data = await response.json();
+            this.token = data.token;
+            this.userData = data.user;
+
+            localStorage.setItem(AUTH_TOKEN_KEY, this.token);
+            localStorage.setItem(USER_DATA_KEY, JSON.stringify(this.userData));
+
+            return data;
+        } catch (error) {
+            console.error('Login error:', error);
+            throw error;
+        }
+    }
+
+    async register(fullName, email, password) {
+        try {
+            const response = await fetch(`${API_BASE_URL}/users/register`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    full_name: fullName,
+                    email,
+                    password,
+                }),
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.message || 'Registration failed');
+            }
+
+            const data = await response.json();
+            this.token = data.token;
+            this.userData = data.user;
+
+            localStorage.setItem(AUTH_TOKEN_KEY, this.token);
+            localStorage.setItem(USER_DATA_KEY, JSON.stringify(this.userData));
+
+            return data;
+        } catch (error) {
+            console.error('Registration error:', error);
+            throw error;
+        }
+    }
+
+    logout() {
+        this.token = null;
+        this.userData = null;
+        localStorage.removeItem(AUTH_TOKEN_KEY);
+        localStorage.removeItem(USER_DATA_KEY);
+        window.location.href = '/';
+    }
+}
+
+// ======================
 // API Client
-const api = {
-    // Task endpoints
-    async submitTask(data) {
-        const response = await fetch(`${API_BASE_URL}/tasks/submit`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-        if (!response.ok) throw new Error(await response.text());
-        return response.json();
-    },
+// ======================
+class APIClient {
+    constructor(authManager) {
+        this.authManager = authManager;
+    }
 
-    async getTasks(filters = {}) {
-        const params = new URLSearchParams(filters);
-        const response = await fetch(`${API_BASE_URL}/tasks?${params}`);
-        if (!response.ok) throw new Error(await response.text());
-        return response.json();
-    },
+    async request(endpoint, options = {}) {
+        const headers = {
+            'Content-Type': 'application/json',
+            ...options.headers,
+        };
 
-    async getTask(taskId) {
-        const response = await fetch(`${API_BASE_URL}/tasks/${taskId}`);
-        if (!response.ok) throw new Error(await response.text());
-        return response.json();
-    },
+        if (this.authManager.isAuthenticated()) {
+            headers['Authorization'] = `Bearer ${this.authManager.getToken()}`;
+        }
 
-    async getTaskStatus(taskId) {
-        const response = await fetch(`${API_BASE_URL}/tasks/${taskId}/status`);
-        if (!response.ok) throw new Error(await response.text());
-        return response.json();
-    },
+        try {
+            const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+                ...options,
+                headers,
+            });
 
-    async getTaskResult(taskId) {
-        const response = await fetch(`${API_BASE_URL}/tasks/${taskId}/result`);
-        if (!response.ok) throw new Error(await response.text());
-        return response.json();
-    },
+            if (!response.ok) {
+                if (response.status === 401) {
+                    this.authManager.logout();
+                    throw new Error('Session expired. Please login again.');
+                }
+                const error = await response.json();
+                throw new Error(error.message || 'Request failed');
+            }
 
-    async cancelTask(taskId) {
-        const response = await fetch(`${API_BASE_URL}/tasks/${taskId}`, {
-            method: 'DELETE'
-        });
-        if (!response.ok) throw new Error(await response.text());
-        return response.json();
-    },
+            return await response.json();
+        } catch (error) {
+            console.error('API request error:', error);
+            throw error;
+        }
+    }
 
     // Agent endpoints
-    async getAgents(filters = {}) {
-        const params = new URLSearchParams(filters);
-        const response = await fetch(`${API_BASE_URL}/agents?${params}`);
-        if (!response.ok) throw new Error(await response.text());
-        return response.json();
-    },
+    async getAgents(params = {}) {
+        const queryString = new URLSearchParams(params).toString();
+        return this.request(`/agents${queryString ? '?' + queryString : ''}`);
+    }
 
-    async registerAgent(data) {
-        const response = await fetch(`${API_BASE_URL}/agents/register`, {
+    async getAgent(id) {
+        return this.request(`/agents/${id}`);
+    }
+
+    async registerAgent(agentData) {
+        return this.request('/agents/register', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
+            body: JSON.stringify(agentData),
         });
-        if (!response.ok) throw new Error(await response.text());
-        return response.json();
-    },
+    }
+
+    async updateAgent(id, agentData) {
+        return this.request(`/agents/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(agentData),
+        });
+    }
+
+    async deleteAgent(id) {
+        return this.request(`/agents/${id}`, {
+            method: 'DELETE',
+        });
+    }
+
+    async searchAgents(query) {
+        return this.request(`/agents/search?q=${encodeURIComponent(query)}`);
+    }
+
+    // Task endpoints
+    async getTasks(params = {}) {
+        const queryString = new URLSearchParams(params).toString();
+        return this.request(`/tasks${queryString ? '?' + queryString : ''}`);
+    }
+
+    async getTask(id) {
+        return this.request(`/tasks/${id}`);
+    }
+
+    async submitTask(taskData) {
+        return this.request('/tasks/submit', {
+            method: 'POST',
+            body: JSON.stringify(taskData),
+        });
+    }
+
+    async cancelTask(id) {
+        return this.request(`/tasks/${id}`, {
+            method: 'DELETE',
+        });
+    }
+
+    async getTaskStatus(id) {
+        return this.request(`/tasks/${id}/status`);
+    }
+
+    async getTaskResult(id) {
+        return this.request(`/tasks/${id}/result`);
+    }
 
     // Orchestrator endpoints
     async getOrchestratorMetrics() {
-        const response = await fetch(`${API_BASE_URL}/orchestrator/metrics`);
-        if (!response.ok) throw new Error(await response.text());
-        return response.json();
-    },
+        return this.request('/orchestrator/metrics');
+    }
 
     async getOrchestratorHealth() {
-        const response = await fetch(`${API_BASE_URL}/orchestrator/health`);
-        if (!response.ok) throw new Error(await response.text());
-        return response.json();
+        return this.request('/orchestrator/health');
     }
-};
-
-// UI Components
-const components = {
-    // Dashboard Page
-    dashboard: async () => {
-        try {
-            const [tasksData, metricsData, healthData] = await Promise.all([
-                api.getTasks({ limit: 5 }),
-                api.getOrchestratorMetrics(),
-                api.getOrchestratorHealth()
-            ]);
-
-            return `
-                <div class="flex flex-col gap-8">
-                    <!-- Stats -->
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div class="flex flex-col gap-2 rounded-xl p-6 bg-[#1A1C2A] border border-[#25214a] hover:border-primary transition-colors duration-300">
-                            <p class="text-[#A0A0B0] text-base font-medium leading-normal">Tasks Processed</p>
-                            <p class="text-white tracking-light text-3xl font-bold leading-tight">${metricsData.tasks_processed || 0}</p>
-                        </div>
-                        <div class="flex flex-col gap-2 rounded-xl p-6 bg-[#1A1C2A] border border-[#25214a] hover:border-primary transition-colors duration-300">
-                            <p class="text-[#A0A0B0] text-base font-medium leading-normal">Active Workers</p>
-                            <p class="text-white tracking-light text-3xl font-bold leading-tight">${metricsData.active_workers || 0}</p>
-                        </div>
-                        <div class="flex flex-col gap-2 rounded-xl p-6 bg-[#1A1C2A] border border-[#25214a] hover:border-primary transition-colors duration-300">
-                            <p class="text-[#A0A0B0] text-base font-medium leading-normal">Success Rate</p>
-                            <p class="text-white tracking-light text-3xl font-bold leading-tight">${metricsData.success_rate ? metricsData.success_rate.toFixed(2) : 0}%</p>
-                        </div>
-                    </div>
-
-                    <!-- Orchestrator Health -->
-                    <div class="rounded-xl bg-[#1A1C2A] border border-[#25214a] p-4">
-                        <div class="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-[#25214a]">
-                            <div class="flex justify-between sm:flex-col sm:justify-start gap-x-6 gap-y-1 py-2 sm:px-4">
-                                <p class="text-[#A0A0B0] text-sm font-normal leading-normal">Orchestrator Health</p>
-                                <p class="text-white text-sm font-normal leading-normal text-right sm:text-left flex items-center gap-2">
-                                    <span class="text-[#00FF85]">●</span> ${healthData.status || 'Unknown'}
-                                </p>
-                            </div>
-                            <div class="flex justify-between sm:flex-col sm:justify-start gap-x-6 gap-y-1 py-2 sm:px-4">
-                                <p class="text-[#A0A0B0] text-sm font-normal leading-normal">Active Workers</p>
-                                <p class="text-white text-sm font-normal leading-normal text-right sm:text-left">${healthData.active_workers || 0}</p>
-                            </div>
-                            <div class="flex justify-between sm:flex-col sm:justify-start gap-x-6 gap-y-1 py-2 sm:px-4">
-                                <p class="text-[#A0A0B0] text-sm font-normal leading-normal">Avg Execution Time</p>
-                                <p class="text-white text-sm font-normal leading-normal text-right sm:text-left">${metricsData.avg_execution_ms || 0}ms</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Recent Tasks -->
-                    <div class="flex flex-col rounded-xl bg-[#1A1C2A] border border-[#25214a]">
-                        <div class="flex items-center justify-between px-6 pb-3 pt-5 border-b border-[#25214a]">
-                            <h2 class="text-white text-[22px] font-bold leading-tight tracking-[-0.015em]">Recent Tasks</h2>
-                            <a href="/tasks" class="text-primary text-sm font-medium hover:underline">View All</a>
-                        </div>
-                        <div class="flex flex-col">
-                            ${tasksData.tasks && tasksData.tasks.length > 0 ? tasksData.tasks.map(task => `
-                                <div class="flex items-center gap-4 px-6 min-h-[72px] py-2 justify-between border-b border-[#25214a] last:border-b-0 hover:bg-white/5 transition-colors cursor-pointer" onclick="router.navigate('/task/${task.id}')">
-                                    <div class="flex items-center gap-4">
-                                        <div class="${getStatusColor(task.status)} flex items-center justify-center rounded-lg bg-opacity-20 shrink-0 size-10">
-                                            <span class="material-symbols-outlined">${getStatusIcon(task.status)}</span>
-                                        </div>
-                                        <div class="flex flex-col justify-center">
-                                            <p class="text-white text-base font-medium leading-normal line-clamp-1">${task.type || 'Task'}</p>
-                                            <p class="text-[#A0A0B0] text-sm font-normal leading-normal line-clamp-2">${formatDate(task.created_at)}</p>
-                                        </div>
-                                    </div>
-                                    <div class="shrink-0">
-                                        <span class="px-3 py-1 rounded-full text-xs font-medium ${getStatusBadgeClass(task.status)}">${task.status}</span>
-                                    </div>
-                                </div>
-                            `).join('') : `
-                                <div class="flex items-center justify-center py-12">
-                                    <p class="text-[#A0A0B0] text-sm">No tasks yet. <a href="/submit-task" class="text-primary hover:underline">Submit your first task!</a></p>
-                                </div>
-                            `}
-                        </div>
-                    </div>
-                </div>
-            `;
-        } catch (error) {
-            console.error('Dashboard error:', error);
-            return `<div class="text-red-500">Error loading dashboard: ${error.message}</div>`;
-        }
-    },
-
-    // Task Submission Form
-    submitTask: () => {
-        return `
-            <div class="flex flex-col gap-8">
-                <div class="flex flex-wrap justify-between gap-3">
-                    <div class="flex min-w-72 flex-col gap-3">
-                        <p class="text-white text-4xl font-black leading-tight tracking-[-0.033em]">Submit New Task</p>
-                        <p class="text-[#958ecc] text-base font-normal leading-normal">Configure and dispatch a new task to the AI orchestrator.</p>
-                    </div>
-                </div>
-
-                <form id="task-form" class="flex flex-col gap-8">
-                    <!-- Query Input -->
-                    <div class="flex max-w-full flex-wrap items-end gap-4">
-                        <label class="flex flex-col min-w-40 flex-1">
-                            <p class="text-white text-base font-medium leading-normal pb-2">Query</p>
-                            <input
-                                id="query"
-                                name="query"
-                                required
-                                class="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-xl text-white focus:outline-0 border border-[#352f6a] bg-[#1b1835] focus:border-primary focus:ring-2 focus:ring-primary/50 h-14 placeholder:text-[#958ecc] p-[15px] text-base font-normal leading-normal"
-                                placeholder="Enter your task query or instructions here"
-                            />
-                        </label>
-                    </div>
-
-                    <!-- Priority Selector -->
-                    <div>
-                        <h2 class="text-white text-lg font-bold leading-tight tracking-[-0.015em] pb-2">Priority</h2>
-                        <div class="flex h-10 w-full items-center justify-center rounded-xl bg-[#25214a] p-1">
-                            <label class="flex cursor-pointer h-full grow items-center justify-center overflow-hidden rounded-lg px-2 has-[:checked]:bg-[#121023] text-[#958ecc] has-[:checked]:text-white text-sm font-medium leading-normal transition-colors">
-                                <span class="truncate">Low</span>
-                                <input class="invisible w-0" name="priority" type="radio" value="low"/>
-                            </label>
-                            <label class="flex cursor-pointer h-full grow items-center justify-center overflow-hidden rounded-lg px-2 has-[:checked]:bg-[#121023] text-[#958ecc] has-[:checked]:text-white text-sm font-medium leading-normal transition-colors">
-                                <span class="truncate">Normal</span>
-                                <input checked class="invisible w-0" name="priority" type="radio" value="normal"/>
-                            </label>
-                            <label class="flex cursor-pointer h-full grow items-center justify-center overflow-hidden rounded-lg px-2 has-[:checked]:bg-[#121023] text-[#958ecc] has-[:checked]:text-white text-sm font-medium leading-normal transition-colors">
-                                <span class="truncate">High</span>
-                                <input class="invisible w-0" name="priority" type="radio" value="high"/>
-                            </label>
-                            <label class="flex cursor-pointer h-full grow items-center justify-center overflow-hidden rounded-lg px-2 has-[:checked]:bg-[#121023] text-[#958ecc] has-[:checked]:text-white text-sm font-medium leading-normal transition-colors">
-                                <span class="truncate">Critical</span>
-                                <input class="invisible w-0" name="priority" type="radio" value="critical"/>
-                            </label>
-                        </div>
-                    </div>
-
-                    <!-- Budget and Timeout -->
-                    <div class="flex flex-col md:flex-row gap-4">
-                        <label class="flex flex-col min-w-40 flex-1">
-                            <p class="text-white text-base font-medium leading-normal pb-2">Budget</p>
-                            <div class="relative">
-                                <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#958ecc]">paid</span>
-                                <input
-                                    id="budget"
-                                    name="budget"
-                                    type="number"
-                                    step="0.01"
-                                    min="0.01"
-                                    required
-                                    class="form-input pl-10 flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-xl text-white focus:outline-0 border border-[#352f6a] bg-[#1b1835] focus:border-primary focus:ring-2 focus:ring-primary/50 h-14 placeholder:text-[#958ecc] p-[15px] text-base font-normal leading-normal"
-                                    placeholder="e.g., 1.00"
-                                />
-                            </div>
-                        </label>
-                        <label class="flex flex-col min-w-40 flex-1">
-                            <p class="text-white text-base font-medium leading-normal pb-2">Timeout (seconds)</p>
-                            <div class="relative">
-                                <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#958ecc]">timer</span>
-                                <input
-                                    id="timeout"
-                                    name="timeout"
-                                    type="number"
-                                    min="1"
-                                    max="300"
-                                    class="form-input pl-10 flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-xl text-white focus:outline-0 border border-[#352f6a] bg-[#1b1835] focus:border-primary focus:ring-2 focus:ring-primary/50 h-14 placeholder:text-[#958ecc] p-[15px] text-base font-normal leading-normal"
-                                    placeholder="e.g., 60 (default: 30)"
-                                />
-                            </div>
-                        </label>
-                    </div>
-
-                    <!-- Submit Buttons -->
-                    <div class="flex flex-col sm:flex-row items-center justify-end gap-4 mt-6 border-t border-[#25214a] pt-6">
-                        <button
-                            type="button"
-                            onclick="router.navigate('/')"
-                            class="w-full sm:w-auto flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-xl h-12 px-6 bg-transparent text-white text-base font-bold leading-normal tracking-[0.015em] hover:bg-white/10 transition-colors"
-                        >
-                            <span class="truncate">Cancel</span>
-                        </button>
-                        <button
-                            type="submit"
-                            class="w-full sm:w-auto flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-xl h-12 px-6 bg-gradient-to-r from-[#00BFFF] to-[#FF00FF] text-white text-base font-bold leading-normal tracking-[0.015em] hover:opacity-90 transition-opacity"
-                        >
-                            <span class="truncate">Submit Task</span>
-                        </button>
-                    </div>
-                </form>
-            </div>
-        `;
-    },
-
-    // Task List Page
-    tasks: async () => {
-        try {
-            const tasksData = await api.getTasks({ limit: 50 });
-
-            return `
-                <div class="flex flex-col gap-8">
-                    <!-- Page Heading -->
-                    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                        <div class="flex flex-col gap-2">
-                            <p class="text-white text-4xl font-black leading-tight tracking-[-0.033em]">Task Management</p>
-                            <p class="text-white/60 text-base font-normal leading-normal">Monitor and manage all tasks across the platform.</p>
-                        </div>
-                        <button
-                            onclick="router.navigate('/submit-task')"
-                            class="flex min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-gradient-to-r from-[#00BFFF] to-[#FF00FF] text-white text-sm font-bold leading-normal tracking-[0.015em] hover:opacity-90 transition-opacity"
-                        >
-                            <span class="material-symbols-outlined mr-2 text-base">add</span>
-                            <span class="truncate">New Task</span>
-                        </button>
-                    </div>
-
-                    <!-- Table -->
-                    <div class="w-full overflow-hidden rounded-xl border border-white/10 bg-black/20">
-                        <div class="overflow-x-auto">
-                            <table class="min-w-full font-display">
-                                <thead>
-                                    <tr class="bg-white/5">
-                                        <th class="px-6 py-4 text-left text-xs font-medium text-white/50 uppercase tracking-wider">ID</th>
-                                        <th class="px-6 py-4 text-left text-xs font-medium text-white/50 uppercase tracking-wider">Type</th>
-                                        <th class="px-6 py-4 text-left text-xs font-medium text-white/50 uppercase tracking-wider">Status</th>
-                                        <th class="px-6 py-4 text-left text-xs font-medium text-white/50 uppercase tracking-wider">Priority</th>
-                                        <th class="px-6 py-4 text-left text-xs font-medium text-white/50 uppercase tracking-wider">Created</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-white/10">
-                                    ${tasksData.tasks && tasksData.tasks.length > 0 ? tasksData.tasks.map(task => `
-                                        <tr class="hover:bg-white/[.02] transition-colors cursor-pointer" onclick="showTaskDetails('${task.id}')">
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-white/70">${task.id.substring(0, 12)}...</td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-white">${task.type || 'General'}</td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm">
-                                                <span class="px-3 py-1 rounded-full text-xs font-medium ${getStatusBadgeClass(task.status)}">${task.status}</span>
-                                            </td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-white">${task.priority || 'normal'}</td>
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-white/70">${formatDate(task.created_at)}</td>
-                                        </tr>
-                                    `).join('') : `
-                                        <tr>
-                                            <td colspan="5" class="px-6 py-12 text-center text-[#A0A0B0]">
-                                                No tasks found. <a href="/submit-task" class="text-primary hover:underline">Submit a task</a>
-                                            </td>
-                                        </tr>
-                                    `}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    <!-- Pagination Info -->
-                    <div class="flex items-center justify-center mt-6">
-                        <span class="text-sm text-white/60">Showing ${tasksData.count || 0} tasks</span>
-                    </div>
-                </div>
-            `;
-        } catch (error) {
-            console.error('Tasks page error:', error);
-            return `<div class="text-red-500">Error loading tasks: ${error.message}</div>`;
-        }
-    },
-
-    // Metrics Dashboard
-    metrics: async () => {
-        try {
-            const metricsData = await api.getOrchestratorMetrics();
-
-            return `
-                <div class="flex flex-col gap-8">
-                    <div class="flex flex-col gap-2">
-                        <p class="text-white text-4xl font-black leading-tight tracking-[-0.033em]">Performance Metrics</p>
-                        <p class="text-white/60 text-base font-normal leading-normal">Real-time orchestrator performance metrics and statistics.</p>
-                    </div>
-
-                    <!-- Metrics Grid -->
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                        <div class="flex flex-col gap-2 rounded-xl p-6 bg-[#1A1C2A] border border-[#25214a]">
-                            <p class="text-[#A0A0B0] text-base font-medium leading-normal">Tasks Processed</p>
-                            <p class="text-white tracking-light text-3xl font-bold leading-tight">${metricsData.tasks_processed || 0}</p>
-                        </div>
-                        <div class="flex flex-col gap-2 rounded-xl p-6 bg-[#1A1C2A] border border-[#25214a]">
-                            <p class="text-[#A0A0B0] text-base font-medium leading-normal">Tasks Succeeded</p>
-                            <p class="text-[#00FF85] tracking-light text-3xl font-bold leading-tight">${metricsData.tasks_succeeded || 0}</p>
-                        </div>
-                        <div class="flex flex-col gap-2 rounded-xl p-6 bg-[#1A1C2A] border border-[#25214a]">
-                            <p class="text-[#A0A0B0] text-base font-medium leading-normal">Tasks Failed</p>
-                            <p class="text-[#FF0055] tracking-light text-3xl font-bold leading-tight">${metricsData.tasks_failed || 0}</p>
-                        </div>
-                        <div class="flex flex-col gap-2 rounded-xl p-6 bg-[#1A1C2A] border border-[#25214a]">
-                            <p class="text-[#A0A0B0] text-base font-medium leading-normal">Success Rate</p>
-                            <p class="text-white tracking-light text-3xl font-bold leading-tight">${metricsData.success_rate ? metricsData.success_rate.toFixed(2) : 0}%</p>
-                        </div>
-                        <div class="flex flex-col gap-2 rounded-xl p-6 bg-[#1A1C2A] border border-[#25214a]">
-                            <p class="text-[#A0A0B0] text-base font-medium leading-normal">Avg Execution Time</p>
-                            <p class="text-white tracking-light text-3xl font-bold leading-tight">${metricsData.avg_execution_ms || 0}ms</p>
-                        </div>
-                        <div class="flex flex-col gap-2 rounded-xl p-6 bg-[#1A1C2A] border border-[#25214a]">
-                            <p class="text-[#A0A0B0] text-base font-medium leading-normal">Active Workers</p>
-                            <p class="text-white tracking-light text-3xl font-bold leading-tight">${metricsData.active_workers || 0}</p>
-                        </div>
-                        <div class="flex flex-col gap-2 rounded-xl p-6 bg-[#1A1C2A] border border-[#25214a]">
-                            <p class="text-[#A0A0B0] text-base font-medium leading-normal">Tasks Timed Out</p>
-                            <p class="text-[#FFD700] tracking-light text-3xl font-bold leading-tight">${metricsData.tasks_timed_out || 0}</p>
-                        </div>
-                        <div class="flex flex-col gap-2 rounded-xl p-6 bg-[#1A1C2A] border border-[#25214a]">
-                            <p class="text-[#A0A0B0] text-base font-medium leading-normal">Total Tasks</p>
-                            <p class="text-white tracking-light text-3xl font-bold leading-tight">${metricsData.tasks_processed || 0}</p>
-                        </div>
-                    </div>
-                </div>
-            `;
-        } catch (error) {
-            console.error('Metrics page error:', error);
-            return `<div class="text-red-500">Error loading metrics: ${error.message}</div>`;
-        }
-    }
-};
-
-// Utility Functions
-function getStatusColor(status) {
-    const colors = {
-        'completed': 'text-[#00FF85]',
-        'running': 'text-[#2472F2]',
-        'pending': 'text-[#FFD700]',
-        'queued': 'text-[#FFD700]',
-        'failed': 'text-[#FF4444]',
-        'canceled': 'text-[#958ecc]'
-    };
-    return colors[status] || 'text-gray-400';
 }
 
-function getStatusIcon(status) {
-    const icons = {
-        'completed': 'check_circle',
-        'running': 'sync',
-        'pending': 'schedule',
-        'queued': 'schedule',
-        'failed': 'error',
-        'canceled': 'cancel'
-    };
-    return icons[status] || 'help';
-}
-
-function getStatusBadgeClass(status) {
-    const classes = {
-        'completed': 'bg-[#00FF85]/20 text-[#00FF85]',
-        'running': 'bg-[#2472F2]/20 text-[#2472F2]',
-        'pending': 'bg-[#FFD700]/20 text-[#FFD700]',
-        'queued': 'bg-[#FFD700]/20 text-[#FFD700]',
-        'failed': 'bg-[#FF4444]/20 text-[#FF4444]',
-        'canceled': 'bg-[#958ecc]/20 text-[#958ecc]'
-    };
-    return classes[status] || 'bg-gray-400/20 text-gray-400';
-}
-
-function formatDate(dateString) {
-    if (!dateString) return 'N/A';
-    const date = new Date(dateString);
-    const now = new Date();
-    const diff = now - date;
-    const seconds = Math.floor(diff / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const hours = Math.floor(minutes / 60);
-    const days = Math.floor(hours / 24);
-
-    if (seconds < 60) return `${seconds}s ago`;
-    if (minutes < 60) return `${minutes}m ago`;
-    if (hours < 24) return `${hours}h ago`;
-    if (days < 7) return `${days}d ago`;
-    return date.toLocaleDateString();
-}
-
-// Task Details Modal
-async function showTaskDetails(taskId) {
-    try {
-        const task = await api.getTask(taskId);
-        const status = await api.getTaskStatus(taskId);
-
-        let resultData = null;
-        if (task.status === 'completed' || task.status === 'failed') {
-            try {
-                resultData = await api.getTaskResult(taskId);
-            } catch (e) {
-                console.warn('Could not fetch task result:', e);
-            }
-        }
-
-        const modal = document.createElement('div');
-        modal.className = 'fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm';
-        modal.onclick = (e) => {
-            if (e.target === modal) modal.remove();
+// ======================
+// Router
+// ======================
+class Router {
+    constructor(authManager) {
+        this.authManager = authManager;
+        this.routes = {
+            '/': { page: '/', auth: false },
+            '/login': { page: '/login.html', auth: false },
+            '/signup': { page: '/signup.html', auth: false },
+            '/dashboard': { page: '/dashboard.html', auth: true },
+            '/agents': { page: '/agents.html', auth: true },
+            '/tasks': { page: '/tasks.html', auth: true },
+            '/submit-task': { page: '/submit-task.html', auth: true },
+            '/analytics': { page: '/analytics.html', auth: true },
+            '/api-keys': { page: '/api-keys.html', auth: true },
+            '/settings': { page: '/settings.html', auth: true },
         };
 
-        modal.innerHTML = `
-            <div class="flex w-full max-w-4xl flex-col rounded-xl border border-white/10 bg-[#121023] shadow-2xl shadow-primary/20 max-h-[90vh] overflow-y-auto">
-                <!-- Modal Header -->
-                <header class="flex items-center justify-between gap-4 border-b border-white/10 p-4 sm:p-6 sticky top-0 bg-[#121023] z-10">
-                    <p class="text-xl font-bold text-white sm:text-2xl">Task Details: ${task.id.substring(0, 8)}...</p>
-                    <button onclick="this.closest('.fixed').remove()" class="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-white/5 text-[#958ecc] transition-colors hover:bg-white/10 hover:text-white">
-                        <span class="material-symbols-outlined text-xl">close</span>
-                    </button>
-                </header>
-
-                <!-- Modal Body -->
-                <div class="flex flex-col gap-6 p-4 sm:p-6">
-                    <!-- Progress -->
-                    <div class="flex flex-col gap-4">
-                        <div class="flex flex-col gap-3">
-                            <div class="flex items-center justify-between gap-6">
-                                <p class="text-base font-medium text-white">Status</p>
-                                <p class="text-sm font-normal text-white">${status.progress}%</p>
-                            </div>
-                            <div class="h-2 w-full rounded-full bg-[#352f6a]">
-                                <div class="h-2 rounded-full bg-gradient-to-r from-[#8A2BE2] to-[#00BFFF]" style="width: ${status.progress}%;"></div>
-                            </div>
-                            <p class="text-sm font-normal">
-                                <span class="px-3 py-1 rounded-full text-xs font-medium ${getStatusBadgeClass(task.status)}">${task.status}</span>
-                            </p>
-                        </div>
-
-                        <!-- Task Details Grid -->
-                        <div class="grid grid-cols-2 gap-x-4 gap-y-1 border-t border-solid border-t-[#352f6a] pt-4 md:grid-cols-4">
-                            <div class="flex flex-col gap-1 py-2">
-                                <p class="text-sm font-normal text-[#958ecc]">Priority</p>
-                                <p class="text-sm font-normal text-white capitalize">${task.priority || 'normal'}</p>
-                            </div>
-                            <div class="flex flex-col gap-1 py-2">
-                                <p class="text-sm font-normal text-[#958ecc]">Budget</p>
-                                <p class="text-sm font-normal text-white">$${task.budget || 0}</p>
-                            </div>
-                            <div class="flex flex-col gap-1 py-2">
-                                <p class="text-sm font-normal text-[#958ecc]">Created</p>
-                                <p class="text-sm font-normal text-white">${new Date(task.created_at).toLocaleString()}</p>
-                            </div>
-                            <div class="flex flex-col gap-1 py-2">
-                                <p class="text-sm font-normal text-[#958ecc]">Timeout</p>
-                                <p class="text-sm font-normal text-white">${task.timeout ? (parseInt(task.timeout) / 1000000000) + 's' : 'N/A'}</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Query/Input -->
-                    <div class="rounded-lg bg-[#25214a]/50 p-4">
-                        <div class="flex flex-col gap-2">
-                            <p class="text-lg font-bold tracking-[-0.015em] text-white">Task Input</p>
-                            <pre class="text-base font-normal leading-normal text-[#958ecc] whitespace-pre-wrap">${JSON.stringify(task.input, null, 2)}</pre>
-                        </div>
-                    </div>
-
-                    ${task.assigned_to ? `
-                        <!-- Agent Info -->
-                        <div class="grid grid-cols-2 gap-x-4 border-t border-solid border-t-[#352f6a] pt-4">
-                            <div class="flex flex-col gap-1 py-2">
-                                <p class="text-sm font-normal text-[#958ecc]">Assigned Agent</p>
-                                <p class="text-sm font-normal text-white font-mono">${task.assigned_to}</p>
-                            </div>
-                        </div>
-                    ` : ''}
-
-                    ${resultData && resultData.result ? `
-                        <!-- Result -->
-                        <div class="rounded-lg bg-[#25214a]/50 p-4">
-                            <div class="flex flex-col gap-2">
-                                <p class="text-lg font-bold tracking-[-0.015em] text-white">Result</p>
-                                <div class="rounded-md bg-[#121023] p-3">
-                                    <pre class="text-sm text-[#E0E0E0] font-mono overflow-x-auto">${JSON.stringify(resultData.result, null, 2)}</pre>
-                                </div>
-                            </div>
-                        </div>
-                    ` : ''}
-
-                    ${task.error ? `
-                        <!-- Error -->
-                        <div class="rounded-lg bg-red-500/10 border border-red-500/20 p-4">
-                            <div class="flex flex-col gap-2">
-                                <p class="text-lg font-bold tracking-[-0.015em] text-red-400">Error</p>
-                                <p class="text-sm text-red-300">${task.error}</p>
-                            </div>
-                        </div>
-                    ` : ''}
-                </div>
-
-                <!-- Modal Footer -->
-                <footer class="flex flex-col items-center justify-between gap-4 border-t border-white/10 p-4 sm:flex-row sm:p-6">
-                    <div class="grid w-full grid-cols-2 gap-4 text-sm sm:w-auto sm:flex-row sm:gap-8">
-                        ${resultData ? `
-                            <div class="flex items-baseline gap-2">
-                                <p class="text-[#958ecc]">Cost:</p>
-                                <p class="font-medium text-white">$${resultData.cost || 0}</p>
-                            </div>
-                            <div class="flex items-baseline gap-2">
-                                <p class="text-[#958ecc]">Duration:</p>
-                                <p class="font-medium text-white">${resultData.duration || 0}ms</p>
-                            </div>
-                        ` : ''}
-                    </div>
-                    <div class="flex w-full items-center justify-end gap-3 sm:w-auto">
-                        ${task.status !== 'completed' && task.status !== 'failed' && task.status !== 'canceled' ? `
-                            <button onclick="cancelTask('${task.id}')" class="h-10 cursor-pointer items-center justify-center overflow-hidden rounded-lg bg-[#ff3b30]/20 px-4 text-sm font-medium text-[#ff7b75] transition-colors hover:bg-[#ff3b30]/30">
-                                <span class="truncate">Cancel Task</span>
-                            </button>
-                        ` : ''}
-                        <button onclick="this.closest('.fixed').remove()" class="flex h-10 min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg bg-primary px-4 text-sm font-medium text-white transition-colors hover:bg-primary/90">
-                            <span class="truncate">Close</span>
-                        </button>
-                    </div>
-                </footer>
-            </div>
-        `;
-
-        document.body.appendChild(modal);
-    } catch (error) {
-        console.error('Error showing task details:', error);
-        alert('Error loading task details: ' + error.message);
+        this.init();
     }
-}
 
-async function cancelTask(taskId) {
-    if (!confirm('Are you sure you want to cancel this task?')) return;
+    init() {
+        // Handle initial page load
+        window.addEventListener('DOMContentLoaded', () => {
+            this.handleRoute();
+        });
 
-    try {
-        await api.cancelTask(taskId);
-        alert('Task canceled successfully');
-        document.querySelector('.fixed').remove();
-        router.navigate('/tasks');
-    } catch (error) {
-        console.error('Error canceling task:', error);
-        alert('Error canceling task: ' + error.message);
+        // Handle back/forward buttons
+        window.addEventListener('popstate', () => {
+            this.handleRoute();
+        });
+
+        // Intercept all link clicks
+        document.addEventListener('click', (e) => {
+            const link = e.target.closest('a');
+            if (link && link.href && link.href.startsWith(window.location.origin)) {
+                e.preventDefault();
+                const path = link.pathname;
+                this.navigate(path);
+            }
+        });
     }
-}
 
-// Router
-const router = {
-    routes: {
-        '/': components.dashboard,
-        '/submit-task': components.submitTask,
-        '/tasks': components.tasks,
-        '/dashboard': components.metrics,
-    },
-
-    async navigate(path) {
+    handleRoute() {
+        const path = window.location.pathname;
         const route = this.routes[path];
+
         if (!route) {
-            console.error('Route not found:', path);
+            // Route not found, redirect to home
+            this.navigate('/');
             return;
         }
 
-        const content = await route();
-        document.getElementById('app-content').innerHTML = content;
-
-        // Update URL without page reload
-        window.history.pushState({}, '', path);
-
-        // Set up form handlers if on submit page
-        if (path === '/submit-task') {
-            this.setupTaskFormHandler();
+        // Check authentication
+        if (route.auth && !this.authManager.isAuthenticated()) {
+            // Redirect to login if authentication required
+            this.navigate('/login');
+            return;
         }
 
-        // Update active nav link
-        this.updateActiveNav(path);
-    },
-
-    setupTaskFormHandler() {
-        const form = document.getElementById('task-form');
-        if (!form) return;
-
-        form.addEventListener('submit', async (e) => {
-            e.preventDefault();
-
-            const formData = new FormData(form);
-            const data = {
-                query: formData.get('query'),
-                priority: formData.get('priority'),
-                budget: parseFloat(formData.get('budget')),
-                timeout: formData.get('timeout') ? parseInt(formData.get('timeout')) : 30
-            };
-
-            try {
-                const result = await api.submitTask(data);
-                alert(`Task submitted successfully! Task ID: ${result.task_id}`);
-                router.navigate('/tasks');
-            } catch (error) {
-                console.error('Error submitting task:', error);
-                alert('Error submitting task: ' + error.message);
-            }
-        });
-    },
-
-    updateActiveNav(currentPath) {
-        // Remove all active states
-        document.querySelectorAll('nav a').forEach(link => {
-            link.classList.remove('font-bold');
-            link.classList.add('text-white/80');
-        });
-
-        // Add active state to current nav item
-        const navMap = {
-            '/': 'nav-dashboard',
-            '/tasks': 'nav-tasks',
-            '/submit-task': 'nav-tasks',
-            '/agents': 'nav-agents',
-            '/dashboard': 'nav-metrics'
-        };
-
-        const activeId = navMap[currentPath];
-        if (activeId) {
-            const activeLink = document.getElementById(activeId);
-            if (activeLink) {
-                activeLink.classList.add('font-bold');
-                activeLink.classList.remove('text-white/80');
-            }
+        // If authenticated user tries to access login/signup, redirect to dashboard
+        if (!route.auth && this.authManager.isAuthenticated() && (path === '/login' || path === '/signup')) {
+            this.navigate('/dashboard');
+            return;
         }
-    },
-
-    init() {
-        // Handle browser back/forward
-        window.addEventListener('popstate', () => {
-            this.navigate(window.location.pathname);
-        });
-
-        // Handle navigation links
-        document.addEventListener('click', (e) => {
-            const link = e.target.closest('a[href^="/"]');
-            if (link && !link.hasAttribute('target')) {
-                e.preventDefault();
-                this.navigate(link.getAttribute('href'));
-            }
-        });
-
-        // Navigate to current path
-        this.navigate(window.location.pathname);
     }
+
+    navigate(path) {
+        window.history.pushState({}, '', path);
+        window.location.href = path;
+    }
+}
+
+// ======================
+// UI Helpers
+// ======================
+class UIHelpers {
+    static showNotification(message, type = 'info') {
+        // Create notification element
+        const notification = document.createElement('div');
+        notification.className = `fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg max-w-md animate-slide-in ${
+            type === 'success' ? 'bg-green-500' :
+            type === 'error' ? 'bg-red-500' :
+            type === 'warning' ? 'bg-yellow-500' :
+            'bg-blue-500'
+        } text-white`;
+        notification.innerHTML = `
+            <div class="flex items-center gap-3">
+                <span class="material-symbols-outlined">
+                    ${type === 'success' ? 'check_circle' :
+                      type === 'error' ? 'error' :
+                      type === 'warning' ? 'warning' :
+                      'info'}
+                </span>
+                <p class="flex-1">${message}</p>
+                <button onclick="this.parentElement.parentElement.remove()" class="hover:opacity-80">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+        `;
+
+        document.body.appendChild(notification);
+
+        // Auto-remove after 5 seconds
+        setTimeout(() => {
+            notification.remove();
+        }, 5000);
+    }
+
+    static showLoading(element, show = true) {
+        if (show) {
+            element.disabled = true;
+            element.innerHTML = `
+                <span class="inline-block animate-spin mr-2">⏳</span>
+                Loading...
+            `;
+        } else {
+            element.disabled = false;
+        }
+    }
+
+    static formatDate(dateString) {
+        const date = new Date(dateString);
+        const now = new Date();
+        const diffMs = now - date;
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMs / 3600000);
+        const diffDays = Math.floor(diffMs / 86400000);
+
+        if (diffMins < 1) return 'Just now';
+        if (diffMins < 60) return `${diffMins}m ago`;
+        if (diffHours < 24) return `${diffHours}h ago`;
+        if (diffDays < 7) return `${diffDays}d ago`;
+
+        return date.toLocaleDateString();
+    }
+
+    static formatNumber(num) {
+        if (num >= 1000000) {
+            return (num / 1000000).toFixed(1) + 'M';
+        }
+        if (num >= 1000) {
+            return (num / 1000).toFixed(1) + 'K';
+        }
+        return num.toString();
+    }
+}
+
+// ======================
+// Initialize Application
+// ======================
+const authManager = new AuthManager();
+const apiClient = new APIClient(authManager);
+const router = new Router(authManager);
+
+// Make available globally for inline event handlers
+window.app = {
+    authManager,
+    apiClient,
+    router,
+    UIHelpers,
 };
 
-// Initialize app when DOM is ready
-document.addEventListener('DOMContentLoaded', () => {
-    router.init();
-});
+// ======================
+// Login Page Handler
+// ======================
+if (window.location.pathname === '/login.html') {
+    document.addEventListener('DOMContentLoaded', () => {
+        const loginForm = document.querySelector('form');
+        if (loginForm) {
+            loginForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+
+                const email = document.getElementById('email').value;
+                const password = document.getElementById('password').value;
+                const submitBtn = loginForm.querySelector('button[type="submit"]');
+
+                try {
+                    UIHelpers.showLoading(submitBtn);
+                    await authManager.login(email, password);
+                    UIHelpers.showNotification('Login successful!', 'success');
+                    setTimeout(() => {
+                        router.navigate('/dashboard');
+                    }, 500);
+                } catch (error) {
+                    UIHelpers.showNotification(error.message, 'error');
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Sign In';
+                }
+            });
+        }
+
+        // Password visibility toggle
+        const toggleButtons = document.querySelectorAll('[onclick*="togglePassword"]');
+        toggleButtons.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const input = btn.closest('.relative').querySelector('input');
+                const icon = btn.querySelector('.material-symbols-outlined');
+
+                if (input.type === 'password') {
+                    input.type = 'text';
+                    icon.textContent = 'visibility_off';
+                } else {
+                    input.type = 'password';
+                    icon.textContent = 'visibility';
+                }
+            });
+        });
+    });
+}
+
+// ======================
+// Signup Page Handler
+// ======================
+if (window.location.pathname === '/signup.html') {
+    document.addEventListener('DOMContentLoaded', () => {
+        const signupForm = document.getElementById('signup-form');
+        if (signupForm) {
+            const passwordInput = document.getElementById('password');
+            const confirmPasswordInput = document.getElementById('confirm-password');
+            const passwordMatchError = document.getElementById('password-match-error');
+
+            // Password strength checker
+            passwordInput.addEventListener('input', function() {
+                const password = this.value;
+                let strength = 0;
+                const strengthBars = [
+                    document.getElementById('strength-bar-1'),
+                    document.getElementById('strength-bar-2'),
+                    document.getElementById('strength-bar-3'),
+                    document.getElementById('strength-bar-4')
+                ];
+                const strengthText = document.getElementById('strength-text');
+
+                if (password.length >= 8) strength++;
+                if (password.match(/[a-z]/) && password.match(/[A-Z]/)) strength++;
+                if (password.match(/[0-9]/)) strength++;
+                if (password.match(/[^a-zA-Z0-9]/)) strength++;
+
+                // Reset all bars
+                strengthBars.forEach(bar => {
+                    bar.className = 'password-strength-bar flex-1 rounded bg-gray-700';
+                });
+
+                // Update bars based on strength
+                const colors = ['bg-red-500', 'bg-orange-500', 'bg-yellow-500', 'bg-green-500'];
+                const texts = ['Weak password', 'Fair password', 'Good password', 'Strong password'];
+
+                for (let i = 0; i < strength; i++) {
+                    strengthBars[i].classList.remove('bg-gray-700');
+                    strengthBars[i].classList.add(colors[strength - 1]);
+                }
+
+                strengthText.textContent = password.length > 0 ? texts[strength - 1] || 'Very weak password' : 'Enter a password';
+                const textColors = ['text-red-400', 'text-orange-400', 'text-yellow-400', 'text-green-400'];
+                strengthText.className = `text-xs ${strength > 0 ? textColors[strength - 1] : 'text-gray-500'}`;
+            });
+
+            // Password match validation
+            confirmPasswordInput.addEventListener('input', function() {
+                if (this.value !== passwordInput.value && this.value.length > 0) {
+                    passwordMatchError.classList.remove('hidden');
+                    this.classList.add('border-red-500');
+                } else {
+                    passwordMatchError.classList.add('hidden');
+                    this.classList.remove('border-red-500');
+                }
+            });
+
+            // Form submission
+            signupForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+
+                const fullName = document.getElementById('full-name').value;
+                const email = document.getElementById('email').value;
+                const password = passwordInput.value;
+                const confirmPassword = confirmPasswordInput.value;
+                const termsAccepted = document.getElementById('terms').checked;
+                const submitBtn = signupForm.querySelector('button[type="submit"]');
+
+                if (password !== confirmPassword) {
+                    UIHelpers.showNotification('Passwords do not match', 'error');
+                    return;
+                }
+
+                if (!termsAccepted) {
+                    UIHelpers.showNotification('Please accept the Terms & Conditions', 'error');
+                    return;
+                }
+
+                try {
+                    UIHelpers.showLoading(submitBtn);
+                    await authManager.register(fullName, email, password);
+                    UIHelpers.showNotification('Account created successfully!', 'success');
+                    setTimeout(() => {
+                        router.navigate('/dashboard');
+                    }, 500);
+                } catch (error) {
+                    UIHelpers.showNotification(error.message, 'error');
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Create Account';
+                }
+            });
+
+            // Password visibility toggles
+            window.togglePassword = function(inputId) {
+                const input = document.getElementById(inputId);
+                const icon = document.getElementById(inputId + '-toggle-icon');
+
+                if (input.type === 'password') {
+                    input.type = 'text';
+                    icon.textContent = 'visibility_off';
+                } else {
+                    input.type = 'password';
+                    icon.textContent = 'visibility';
+                }
+            };
+        }
+    });
+}
+
+// ======================
+// Dashboard Page Handler
+// ======================
+if (window.location.pathname === '/dashboard.html') {
+    document.addEventListener('DOMContentLoaded', async () => {
+        try {
+            // Load orchestrator metrics
+            const metrics = await apiClient.getOrchestratorMetrics();
+
+            // Update metric cards
+            if (metrics) {
+                document.querySelector('[data-metric="active-agents"]').textContent =
+                    UIHelpers.formatNumber(metrics.active_agents || 0);
+                document.querySelector('[data-metric="tasks-completed"]').textContent =
+                    UIHelpers.formatNumber(metrics.tasks_completed || 0);
+                document.querySelector('[data-metric="network-calls"]').textContent =
+                    UIHelpers.formatNumber(metrics.network_calls || 0);
+                document.querySelector('[data-metric="errors"]').textContent =
+                    UIHelpers.formatNumber(metrics.errors || 0);
+            }
+
+            // Load recent tasks
+            const tasks = await apiClient.getTasks({ limit: 5, sort: 'recent' });
+            if (tasks && tasks.tasks) {
+                renderRecentTasks(tasks.tasks);
+            }
+        } catch (error) {
+            console.error('Error loading dashboard data:', error);
+            UIHelpers.showNotification('Failed to load dashboard data', 'error');
+        }
+
+        // Set current date/time
+        const dateElement = document.querySelector('[data-current-date]');
+        if (dateElement) {
+            const now = new Date();
+            dateElement.textContent = now.toLocaleDateString('en-US', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+        }
+
+        function renderRecentTasks(tasks) {
+            const container = document.querySelector('[data-recent-tasks]');
+            if (!container) return;
+
+            container.innerHTML = tasks.map(task => `
+                <div class="flex items-center gap-4 p-3 bg-white/5 rounded-lg hover:bg-white/10 transition-colors cursor-pointer">
+                    <div class="flex-1">
+                        <p class="font-medium">${task.query || 'Task'}</p>
+                        <p class="text-sm text-gray-400">${UIHelpers.formatDate(task.created_at)}</p>
+                    </div>
+                    <span class="px-3 py-1 rounded-full text-xs font-medium ${
+                        task.status === 'completed' ? 'bg-green-500/20 text-green-400' :
+                        task.status === 'running' ? 'bg-blue-500/20 text-blue-400' :
+                        task.status === 'failed' ? 'bg-red-500/20 text-red-400' :
+                        'bg-gray-500/20 text-gray-400'
+                    }">${task.status}</span>
+                </div>
+            `).join('');
+        }
+    });
+}
+
+// ======================
+// Agents Page Handler
+// ======================
+if (window.location.pathname === '/agents.html') {
+    document.addEventListener('DOMContentLoaded', async () => {
+        let currentPage = 1;
+        const pageSize = 6;
+
+        async function loadAgents(search = '', status = '', sort = 'recent') {
+            try {
+                const agents = await apiClient.getAgents({
+                    page: currentPage,
+                    limit: pageSize,
+                    search,
+                    status,
+                    sort
+                });
+
+                if (agents && agents.agents) {
+                    renderAgents(agents.agents);
+                    updatePagination(agents.total, agents.page, agents.total_pages);
+                }
+            } catch (error) {
+                console.error('Error loading agents:', error);
+                UIHelpers.showNotification('Failed to load agents', 'error');
+            }
+        }
+
+        function renderAgents(agents) {
+            // Agent rendering logic will be added based on actual API response structure
+            console.log('Agents loaded:', agents);
+        }
+
+        function updatePagination(total, page, totalPages) {
+            // Pagination update logic
+            console.log(`Page ${page} of ${totalPages}, Total: ${total}`);
+        }
+
+        // Initial load
+        await loadAgents();
+
+        // Search functionality
+        const searchInput = document.querySelector('input[placeholder*="Search"]');
+        if (searchInput) {
+            let searchTimeout;
+            searchInput.addEventListener('input', (e) => {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    loadAgents(e.target.value);
+                }, 300);
+            });
+        }
+    });
+}
+
+// ======================
+// Global Logout Handler
+// ======================
+window.logout = function() {
+    authManager.logout();
+};
+
+console.log('ZeroState app initialized');

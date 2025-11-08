@@ -157,42 +157,53 @@ func (s *Server) setupRoutes() {
 	// API v1 routes
 	v1 := s.router.Group("/api/v1")
 	{
-		// Agent management
-		agents := v1.Group("/agents")
-		{
-			agents.POST("/register", s.handlers.RegisterAgent)
-			agents.GET("/:id", s.handlers.GetAgent)
-			agents.GET("", s.handlers.ListAgents)
-			agents.PUT("/:id", s.handlers.UpdateAgent)
-			agents.DELETE("/:id", s.handlers.DeleteAgent)
-			agents.GET("/search", s.handlers.SearchAgents)
-		}
-
-		// Task management
-		tasks := v1.Group("/tasks")
-		{
-			tasks.POST("/submit", s.handlers.SubmitTask)
-			tasks.GET("/:id", s.handlers.GetTask)
-			tasks.GET("", s.handlers.ListTasks)
-			tasks.DELETE("/:id", s.handlers.CancelTask)
-			tasks.GET("/:id/status", s.handlers.GetTaskStatus)
-			tasks.GET("/:id/result", s.handlers.GetTaskResult)
-		}
-
-		// Orchestrator monitoring
-		orchestrator := v1.Group("/orchestrator")
-		{
-			orchestrator.GET("/metrics", s.handlers.GetOrchestratorMetrics)
-			orchestrator.GET("/health", s.handlers.GetOrchestratorHealth)
-		}
-
-		// User management (future)
+		// User management (public routes)
 		users := v1.Group("/users")
 		{
 			users.POST("/register", s.handlers.RegisterUser)
 			users.POST("/login", s.handlers.LoginUser)
-			users.POST("/logout", s.handlers.LogoutUser)
-			users.GET("/me", s.handlers.GetCurrentUser)
+
+			// Protected user routes
+			protected := users.Group("")
+			protected.Use(authMiddleware())
+			{
+				protected.POST("/logout", s.handlers.LogoutUser)
+				protected.GET("/me", s.handlers.GetCurrentUser)
+			}
+		}
+
+		// Protected routes - require authentication
+		protected := v1.Group("")
+		protected.Use(authMiddleware())
+		{
+			// Agent management
+			agents := protected.Group("/agents")
+			{
+				agents.POST("/register", s.handlers.RegisterAgent)
+				agents.GET("/:id", s.handlers.GetAgent)
+				agents.GET("", s.handlers.ListAgents)
+				agents.PUT("/:id", s.handlers.UpdateAgent)
+				agents.DELETE("/:id", s.handlers.DeleteAgent)
+				agents.GET("/search", s.handlers.SearchAgents)
+			}
+
+			// Task management
+			tasks := protected.Group("/tasks")
+			{
+				tasks.POST("/submit", s.handlers.SubmitTask)
+				tasks.GET("/:id", s.handlers.GetTask)
+				tasks.GET("", s.handlers.ListTasks)
+				tasks.DELETE("/:id", s.handlers.CancelTask)
+				tasks.GET("/:id/status", s.handlers.GetTaskStatus)
+				tasks.GET("/:id/result", s.handlers.GetTaskResult)
+			}
+
+			// Orchestrator monitoring
+			orchestrator := protected.Group("/orchestrator")
+			{
+				orchestrator.GET("/metrics", s.handlers.GetOrchestratorMetrics)
+				orchestrator.GET("/health", s.handlers.GetOrchestratorHealth)
+			}
 		}
 	}
 }

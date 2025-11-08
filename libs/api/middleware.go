@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/aidenlippert/zerostate/libs/auth"
 	"github.com/gin-gonic/gin"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -165,7 +166,7 @@ func rateLimitMiddleware(ratePerMinute int) gin.HandlerFunc {
 	}
 }
 
-// authMiddleware validates authentication (JWT or API key)
+// authMiddleware validates JWT authentication
 func authMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Get token from Authorization header
@@ -179,15 +180,53 @@ func authMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// TODO: Implement JWT validation or API key validation
-		// For now, this is a placeholder
+		// Extract Bearer token
+		parts := splitAuthHeader(authHeader)
+		if len(parts) != 2 || parts[0] != "Bearer" {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error":   "unauthorized",
+				"message": "invalid authorization header format, expected: Bearer <token>",
+			})
+			c.Abort()
+			return
+		}
 
-		// Extract token (Bearer <token> or ApiKey <key>)
-		// Validate token
+		tokenString := parts[1]
+
+		// Validate token using auth library
+		claims, err := auth.ValidateToken(tokenString)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error":   "unauthorized",
+				"message": err.Error(),
+			})
+			c.Abort()
+			return
+		}
+
 		// Store user info in context
+		c.Set("user_id", claims.UserID)
+		c.Set("user_email", claims.Email)
 
 		c.Next()
 	}
+}
+
+// Helper functions for auth middleware
+func splitAuthHeader(header string) []string {
+	parts := make([]string, 0, 2)
+	spaceIdx := -1
+	for i, c := range header {
+		if c == ' ' {
+			spaceIdx = i
+			break
+		}
+	}
+	if spaceIdx > 0 {
+		parts = append(parts, header[:spaceIdx])
+		parts = append(parts, header[spaceIdx+1:])
+	}
+	return parts
 }
 
 // timeoutMiddleware adds a timeout to request processing

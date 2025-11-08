@@ -5,6 +5,8 @@ toolchain go1.24.10
 use (
 	./cmd/api
 	./libs/api
+	./libs/auth
+	./libs/database
 	./libs/economic
 	./libs/execution
 	./libs/guild
