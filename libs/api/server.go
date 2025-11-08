@@ -205,6 +205,15 @@ func (s *Server) setupRoutes() {
 				orchestrator.GET("/metrics", s.handlers.GetOrchestratorMetrics)
 				orchestrator.GET("/health", s.handlers.GetOrchestratorHealth)
 			}
+
+			// Deployment management
+			deployments := protected.Group("/deployments")
+			{
+				deployments.POST("", s.handlers.DeployAgent)
+				deployments.GET("/:id", s.handlers.GetDeployment)
+				deployments.GET("", s.handlers.ListUserDeployments)
+				deployments.POST("/:id/stop", s.handlers.StopDeployment)
+			}
 		}
 	}
 }

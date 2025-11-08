@@ -40,6 +40,18 @@ type Agent struct {
 	UpdatedAt      time.Time `json:"updated_at"`
 }
 
+// AgentDeployment represents an agent deployment in the database
+type AgentDeployment struct {
+	ID          string    `json:"id"`
+	AgentID     string    `json:"agent_id"`
+	UserID      string    `json:"user_id"`
+	Status      string    `json:"status"` // deploying, deployed, failed, stopped
+	Environment string    `json:"environment"` // development, staging, production
+	Config      string    `json:"config"` // JSON configuration stored as string
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
 // NewDB creates a new database connection
 // Supports both SQLite (local dev) and PostgreSQL (production/Supabase)
 // Examples:
@@ -112,6 +124,23 @@ func (db *DB) initSchema() error {
 
 		CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status);
 		CREATE INDEX IF NOT EXISTS idx_agents_rating ON agents(rating);
+
+		CREATE TABLE IF NOT EXISTS agent_deployments (
+			id VARCHAR(255) PRIMARY KEY,
+			agent_id VARCHAR(255) NOT NULL,
+			user_id VARCHAR(255) NOT NULL,
+			status VARCHAR(50) NOT NULL DEFAULT 'deploying',
+			environment VARCHAR(50) NOT NULL DEFAULT 'development',
+			config TEXT,
+			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE,
+			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_deployments_agent ON agent_deployments(agent_id);
+		CREATE INDEX IF NOT EXISTS idx_deployments_user ON agent_deployments(user_id);
+		CREATE INDEX IF NOT EXISTS idx_deployments_status ON agent_deployments(status);
 		`
 	} else {
 		schema = `
@@ -141,6 +170,23 @@ func (db *DB) initSchema() error {
 
 		CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status);
 		CREATE INDEX IF NOT EXISTS idx_agents_rating ON agents(rating);
+
+		CREATE TABLE IF NOT EXISTS agent_deployments (
+			id TEXT PRIMARY KEY,
+			agent_id TEXT NOT NULL,
+			user_id TEXT NOT NULL,
+			status TEXT NOT NULL DEFAULT 'deploying',
+			environment TEXT NOT NULL DEFAULT 'development',
+			config TEXT,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE,
+			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_deployments_agent ON agent_deployments(agent_id);
+		CREATE INDEX IF NOT EXISTS idx_deployments_user ON agent_deployments(user_id);
+		CREATE INDEX IF NOT EXISTS idx_deployments_status ON agent_deployments(status);
 		`
 	}
 
@@ -536,4 +582,155 @@ func (db *DB) GetAgentCount() (int64, error) {
 	}
 
 	return count, nil
+}
+
+// CreateDeployment creates a new agent deployment
+func (db *DB) CreateDeployment(deployment *AgentDeployment) error {
+	var query string
+	if db.driverName == "postgres" {
+		query = `
+			INSERT INTO agent_deployments (id, agent_id, user_id, status, environment, config, created_at, updated_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		`
+	} else {
+		query = `
+			INSERT INTO agent_deployments (id, agent_id, user_id, status, environment, config, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		`
+	}
+
+	_, err := db.conn.Exec(
+		query,
+		deployment.ID,
+		deployment.AgentID,
+		deployment.UserID,
+		deployment.Status,
+		deployment.Environment,
+		deployment.Config,
+		deployment.CreatedAt,
+		deployment.UpdatedAt,
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to create deployment: %w", err)
+	}
+
+	return nil
+}
+
+// GetDeploymentByID retrieves a deployment by ID
+func (db *DB) GetDeploymentByID(id string) (*AgentDeployment, error) {
+	var query string
+	if db.driverName == "postgres" {
+		query = `SELECT id, agent_id, user_id, status, environment, config, created_at, updated_at FROM agent_deployments WHERE id = $1`
+	} else {
+		query = `SELECT id, agent_id, user_id, status, environment, config, created_at, updated_at FROM agent_deployments WHERE id = ?`
+	}
+
+	deployment := &AgentDeployment{}
+	err := db.conn.QueryRow(query, id).Scan(
+		&deployment.ID,
+		&deployment.AgentID,
+		&deployment.UserID,
+		&deployment.Status,
+		&deployment.Environment,
+		&deployment.Config,
+		&deployment.CreatedAt,
+		&deployment.UpdatedAt,
+	)
+
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get deployment: %w", err)
+	}
+
+	return deployment, nil
+}
+
+// ListDeploymentsByUser retrieves all deployments for a user
+func (db *DB) ListDeploymentsByUser(userID string) ([]*AgentDeployment, error) {
+	var query string
+	if db.driverName == "postgres" {
+		query = `SELECT id, agent_id, user_id, status, environment, config, created_at, updated_at FROM agent_deployments WHERE user_id = $1 ORDER BY created_at DESC`
+	} else {
+		query = `SELECT id, agent_id, user_id, status, environment, config, created_at, updated_at FROM agent_deployments WHERE user_id = ? ORDER BY created_at DESC`
+	}
+
+	rows, err := db.conn.Query(query, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list deployments: %w", err)
+	}
+	defer rows.Close()
+
+	var deployments []*AgentDeployment
+	for rows.Next() {
+		deployment := &AgentDeployment{}
+		err := rows.Scan(
+			&deployment.ID,
+			&deployment.AgentID,
+			&deployment.UserID,
+			&deployment.Status,
+			&deployment.Environment,
+			&deployment.Config,
+			&deployment.CreatedAt,
+			&deployment.UpdatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan deployment: %w", err)
+		}
+		deployments = append(deployments, deployment)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating deployments: %w", err)
+	}
+
+	return deployments, nil
+}
+
+// UpdateDeployment updates a deployment
+func (db *DB) UpdateDeployment(deployment *AgentDeployment) error {
+	var query string
+	if db.driverName == "postgres" {
+		query = `UPDATE agent_deployments SET status = $1, environment = $2, config = $3, updated_at = $4 WHERE id = $5`
+	} else {
+		query = `UPDATE agent_deployments SET status = ?, environment = ?, config = ?, updated_at = ? WHERE id = ?`
+	}
+
+	deployment.UpdatedAt = time.Now()
+
+	_, err := db.conn.Exec(
+		query,
+		deployment.Status,
+		deployment.Environment,
+		deployment.Config,
+		deployment.UpdatedAt,
+		deployment.ID,
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to update deployment: %w", err)
+	}
+
+	return nil
+}
+
+// DeleteDeployment deletes a deployment
+func (db *DB) DeleteDeployment(id string) error {
+	var query string
+	if db.driverName == "postgres" {
+		query = `DELETE FROM agent_deployments WHERE id = $1`
+	} else {
+		query = `DELETE FROM agent_deployments WHERE id = ?`
+	}
+
+	_, err := db.conn.Exec(query, id)
+	if err != nil {
+		return fmt.Errorf("failed to delete deployment: %w", err)
+	}
+
+	return nil
 }
