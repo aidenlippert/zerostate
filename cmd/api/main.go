@@ -92,14 +92,16 @@ func main() {
 
 	// Initialize orchestrator components
 	logger.Info("initializing orchestrator components")
-	selector := orchestration.NewHNSWAgentSelector(hnsw, logger)
+
+	// Use database-backed agent selector with meta-agent auction
+	selector := orchestration.NewDatabaseAgentSelector(db, orchestration.DefaultMetaAgentConfig(), logger)
 	executor := orchestration.NewMockTaskExecutor(logger)
 
 	orchConfig := orchestration.DefaultOrchestratorConfig()
 	orchConfig.NumWorkers = *workers
 
 	orch := orchestration.NewOrchestrator(ctx, taskQueue, selector, executor, orchConfig, logger)
-	logger.Info("orchestrator components initialized")
+	logger.Info("orchestrator components initialized with meta-agent")
 
 	// Start orchestrator
 	logger.Info("starting orchestrator")
