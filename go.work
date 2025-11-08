@@ -22,3 +22,12 @@ use (
 	./libs/telemetry
 	./libs/websocket
 )
+
+// Fix dependency conflicts across workspace
+replace (
+	// Fix genproto ambiguous imports - use the split packages
+	google.golang.org/genproto => google.golang.org/genproto v0.0.0-20250825161204-c5933d9347a5
+
+	// Fix libp2p core ambiguous imports - prevent separate core module
+	github.com/libp2p/go-libp2p/core => github.com/libp2p/go-libp2p v0.39.1
+)

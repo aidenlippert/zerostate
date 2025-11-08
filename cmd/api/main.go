@@ -93,7 +93,7 @@ func main() {
 	defer taskQueue.Close()
 	logger.Info("task queue initialized")
 
-	// Initialize WASM execution components
+	// Initialize WASM execution components (partial - binaryStore needs S3 which is initialized later)
 	logger.Info("initializing WASM execution components")
 
 	// Create WASM runner with 5-minute timeout
@@ -102,13 +102,59 @@ func main() {
 	// Create result store with database connection
 	resultStore := execution.NewPostgresResultStore(db.Conn(), logger)
 
-	// Create adapters for TaskExecutor interfaces
-	var binaryStore execution.BinaryStore
-	if s3Storage != nil {
-		binaryStore = execution.NewS3BinaryStore(s3Storage, db)
+	logger.Info("WASM runner and result store initialized")
+
+	// Initialize S3 storage (optional) - must be before orchestrator
+	var s3Storage *storage.S3Storage
+	if bucket := os.Getenv("S3_BUCKET"); bucket != "" {
+		logger.Info("initializing S3 storage")
+		s3Config := &storage.S3Config{
+			Bucket:          bucket,
+			Region:          getEnv("S3_REGION", "us-east-1"),
+			AccessKeyID:     os.Getenv("AWS_ACCESS_KEY_ID"),
+			SecretAccessKey: os.Getenv("AWS_SECRET_ACCESS_KEY"),
+			Endpoint:        os.Getenv("S3_ENDPOINT"), // For LocalStack/MinIO
+		}
+		var err error
+		s3Storage, err = storage.NewS3Storage(ctx, s3Config, logger)
+		if err != nil {
+			logger.Warn("failed to initialize S3 storage, uploads will use placeholder URLs",
+				zap.Error(err),
+			)
+			s3Storage = nil
+		} else {
+			logger.Info("S3 storage initialized successfully",
+				zap.String("bucket", s3Config.Bucket),
+				zap.String("region", s3Config.Region),
+			)
+		}
+	} else {
+		logger.Info("S3 storage not configured (set S3_BUCKET env var to enable)")
 	}
 
-	logger.Info("WASM execution components initialized")
+	// Create binary store adapter (depends on S3 storage)
+	var binaryStore execution.BinaryStore
+	if s3Storage != nil {
+		// Create adapter function that converts database.Agent to execution.Agent
+		getAgentFunc := func(id string) (*execution.Agent, error) {
+			dbAgent, err := db.GetAgentByID(id)
+			if err != nil {
+				return nil, err
+			}
+			if dbAgent == nil {
+				return nil, nil
+			}
+			return &execution.Agent{
+				BinaryURL:  dbAgent.BinaryURL,
+				BinaryHash: dbAgent.BinaryHash,
+			}, nil
+		}
+		dbAdapter := execution.NewDatabaseAdapter(getAgentFunc)
+		binaryStore = execution.NewS3BinaryStore(s3Storage, dbAdapter)
+		logger.Info("binary store initialized with S3 backend")
+	} else {
+		logger.Info("binary store not available (S3 storage not configured)")
+	}
 
 	// Initialize orchestrator components
 	logger.Info("initializing orchestrator components")
@@ -141,34 +187,6 @@ func main() {
 	}
 	defer orch.Stop()
 	logger.Info("orchestrator started successfully")
-
-	// Initialize S3 storage (optional)
-	var s3Storage *storage.S3Storage
-	if bucket := os.Getenv("S3_BUCKET"); bucket != "" {
-		logger.Info("initializing S3 storage")
-		s3Config := &storage.S3Config{
-			Bucket:          bucket,
-			Region:          getEnv("S3_REGION", "us-east-1"),
-			AccessKeyID:     os.Getenv("AWS_ACCESS_KEY_ID"),
-			SecretAccessKey: os.Getenv("AWS_SECRET_ACCESS_KEY"),
-			Endpoint:        os.Getenv("S3_ENDPOINT"), // For LocalStack/MinIO
-		}
-		var err error
-		s3Storage, err = storage.NewS3Storage(ctx, s3Config, logger)
-		if err != nil {
-			logger.Warn("failed to initialize S3 storage, uploads will use placeholder URLs",
-				zap.Error(err),
-			)
-			s3Storage = nil
-		} else {
-			logger.Info("S3 storage initialized successfully",
-				zap.String("bucket", s3Config.Bucket),
-				zap.String("region", s3Config.Region),
-			)
-		}
-	} else {
-		logger.Info("S3 storage not configured (set S3_BUCKET env var to enable)")
-	}
 
 	// Initialize WebSocket hub
 	logger.Info("initializing WebSocket hub")

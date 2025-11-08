@@ -2,7 +2,7 @@ package execution
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/zerostate/libs/metrics"
+	"github.com/aidenlippert/zerostate/libs/metrics"
 )
 
 // ExecutionMetrics holds all execution-related Prometheus metrics

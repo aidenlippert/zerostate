@@ -80,6 +80,23 @@ func (a *WebSocketHubAdapter) BroadcastTaskUpdate(taskID, status, message string
 	return a.hub.BroadcastTaskUpdate(taskID, status, message)
 }
 
+// DatabaseAdapter adapts database operations to AgentDatabase interface
+type DatabaseAdapter struct {
+	getAgentFunc func(id string) (*Agent, error)
+}
+
+// NewDatabaseAdapter creates a new database adapter with a conversion function
+func NewDatabaseAdapter(getAgentFunc func(id string) (*Agent, error)) *DatabaseAdapter {
+	return &DatabaseAdapter{
+		getAgentFunc: getAgentFunc,
+	}
+}
+
+// GetAgentByID implements AgentDatabase interface
+func (a *DatabaseAdapter) GetAgentByID(id string) (*Agent, error) {
+	return a.getAgentFunc(id)
+}
+
 // TaskQueueAdapter adapts orchestration.TaskQueue to TaskQueue interface
 type TaskQueueAdapter struct {
 	queue Queue

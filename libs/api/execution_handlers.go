@@ -127,6 +127,12 @@ func (h *ExecutionHandlers) ExecuteTaskDirect(c *gin.Context) {
 	taskID := fmt.Sprintf("task_%d", time.Now().UnixNano())
 
 	// Store result in database
+	// Convert error to string for database storage
+	var errorStr string
+	if result.Error != nil {
+		errorStr = result.Error.Error()
+	}
+
 	taskResult := &execution.TaskResult{
 		TaskID:     taskID,
 		AgentID:    req.AgentID,
@@ -134,7 +140,7 @@ func (h *ExecutionHandlers) ExecuteTaskDirect(c *gin.Context) {
 		Stdout:     result.Stdout,
 		Stderr:     result.Stderr,
 		DurationMs: duration.Milliseconds(),
-		Error:      result.Error,
+		Error:      errorStr,
 		CreatedAt:  time.Now(),
 	}
 

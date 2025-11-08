@@ -17,3 +17,12 @@ require (
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+// Fix dependency conflicts
+replace (
+	// Fix genproto ambiguous imports - use the split packages
+	google.golang.org/genproto => google.golang.org/genproto v0.0.0-20250825161204-c5933d9347a5
+
+	// Fix libp2p core ambiguous imports - prevent separate core module
+	github.com/libp2p/go-libp2p/core => github.com/libp2p/go-libp2p v0.39.1
+)
