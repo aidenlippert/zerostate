@@ -254,13 +254,97 @@
                         </table>
                     </div>
                 </section>
+
+                <!-- Orchestrator Metrics -->
+                <section class="mt-6">
+                    <div class="rounded-xl p-6 bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800">
+                        <h3 class="text-slate-900 dark:text-white text-lg font-bold leading-normal mb-4">Orchestrator Performance</h3>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                            <div class="flex flex-col gap-1">
+                                <p class="text-slate-600 dark:text-slate-400 text-sm font-medium">Tasks Processed</p>
+                                <p class="text-slate-900 dark:text-white text-2xl font-bold" id="orchTasksProcessed">-</p>
+                            </div>
+                            <div class="flex flex-col gap-1">
+                                <p class="text-slate-600 dark:text-slate-400 text-sm font-medium">Success Rate</p>
+                                <p class="text-slate-900 dark:text-white text-2xl font-bold" id="orchSuccessRate">-</p>
+                            </div>
+                            <div class="flex flex-col gap-1">
+                                <p class="text-slate-600 dark:text-slate-400 text-sm font-medium">Avg Execution</p>
+                                <p class="text-slate-900 dark:text-white text-2xl font-bold" id="orchAvgExecution">-</p>
+                            </div>
+                            <div class="flex flex-col gap-1">
+                                <p class="text-slate-600 dark:text-slate-400 text-sm font-medium">Active Workers</p>
+                                <p class="text-slate-900 dark:text-white text-2xl font-bold" id="orchActiveWorkers">-</p>
+                            </div>
+                            <div class="flex flex-col gap-1">
+                                <p class="text-slate-600 dark:text-slate-400 text-sm font-medium">Failed Tasks</p>
+                                <p class="text-slate-900 dark:text-white text-2xl font-bold" id="orchFailedTasks">-</p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Agent Performance Breakdown -->
+                <section class="mt-6">
+                    <div class="rounded-xl p-6 bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800">
+                        <h3 class="text-slate-900 dark:text-white text-lg font-bold leading-normal mb-4">Agent Fleet Statistics</h3>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                            <div class="flex flex-col gap-1">
+                                <p class="text-slate-600 dark:text-slate-400 text-sm font-medium">Total Agents</p>
+                                <p class="text-slate-900 dark:text-white text-2xl font-bold" id="totalAgents">-</p>
+                            </div>
+                            <div class="flex flex-col gap-1">
+                                <p class="text-slate-600 dark:text-slate-400 text-sm font-medium">Active Agents</p>
+                                <p class="text-slate-900 dark:text-white text-2xl font-bold" id="activeAgents">-</p>
+                            </div>
+                            <div class="flex flex-col gap-1">
+                                <p class="text-slate-600 dark:text-slate-400 text-sm font-medium">Avg Rating</p>
+                                <p class="text-slate-900 dark:text-white text-2xl font-bold" id="avgRating">-</p>
+                            </div>
+                            <div class="flex flex-col gap-1">
+                                <p class="text-slate-600 dark:text-slate-400 text-sm font-medium">Total Tasks Completed</p>
+                                <p class="text-slate-900 dark:text-white text-2xl font-bold" id="totalTasksCompleted">-</p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- System Health -->
+                <section class="mt-6">
+                    <div class="rounded-xl p-6 bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800">
+                        <h3 class="text-slate-900 dark:text-white text-lg font-bold leading-normal mb-4">System Health</h3>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <div class="flex items-center gap-3">
+                                <div class="w-3 h-3 rounded-full" id="orchHealthIndicator"></div>
+                                <div class="flex flex-col">
+                                    <p class="text-slate-600 dark:text-slate-400 text-sm font-medium">Orchestrator</p>
+                                    <p class="text-slate-900 dark:text-white text-base font-bold" id="orchHealthStatus">-</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <div class="w-3 h-3 rounded-full bg-green-500"></div>
+                                <div class="flex flex-col">
+                                    <p class="text-slate-600 dark:text-slate-400 text-sm font-medium">Database</p>
+                                    <p class="text-slate-900 dark:text-white text-base font-bold">Healthy</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <div class="w-3 h-3 rounded-full bg-green-500"></div>
+                                <div class="flex flex-col">
+                                    <p class="text-slate-600 dark:text-slate-400 text-sm font-medium">API Server</p>
+                                    <p class="text-slate-900 dark:text-white text-base font-bold">Healthy</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
             </div>
         </main>
     </div>
 
     <script>
         // Initialize analytics page
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', async () => {
             // Check authentication
             const auth = new AuthManager();
             if (!auth.isAuthenticated()) {
@@ -271,6 +355,75 @@
             // Set company logo
             const companyLogo = document.getElementById('companyLogo');
             companyLogo.style.backgroundImage = "url('https://lh3.googleusercontent.com/aida-public/AB6AXuCJb5SepSQDFoD_iA9_Ei23JTjkWZu-ZDMHIwjnVrO5O_8N3l7n0_s1aZq-ISV8l8CQbss73ycPqR6UiHAJFx09jNdIH0wXLGb5moEcpAw6WTL4ydF3-Y7Agza0np9ka95iguT6o6wAYib6HF9TNmnIFQapTAo6b0EHyIOrqiabM-erkH9V08JCHBeStrl9GdWMDmS2pgZtt1nfIWRS5LmWT0ykPHq5PsAxHasuYdMDIir5pzNN_JxkNrwKRkL7cwWFq9iKxuDpr44')";
+
+            // Initialize API client
+            const api = new ZeroStateAPI();
+
+            // Load orchestrator metrics
+            try {
+                const orchMetrics = await api.getOrchestratorMetrics();
+                document.getElementById('orchTasksProcessed').textContent = orchMetrics.tasks_processed.toLocaleString();
+                document.getElementById('orchSuccessRate').textContent = orchMetrics.success_rate.toFixed(1) + '%';
+                document.getElementById('orchAvgExecution').textContent = orchMetrics.avg_execution_ms + 'ms';
+                document.getElementById('orchActiveWorkers').textContent = orchMetrics.active_workers;
+                document.getElementById('orchFailedTasks').textContent = orchMetrics.tasks_failed.toLocaleString();
+            } catch (error) {
+                console.error('Failed to load orchestrator metrics:', error);
+            }
+
+            // Load orchestrator health
+            try {
+                const orchHealth = await api.getOrchestratorHealth();
+                const healthStatus = document.getElementById('orchHealthStatus');
+                const healthIndicator = document.getElementById('orchHealthIndicator');
+
+                healthStatus.textContent = orchHealth.status.charAt(0).toUpperCase() + orchHealth.status.slice(1);
+
+                if (orchHealth.status === 'healthy') {
+                    healthIndicator.className = 'w-3 h-3 rounded-full bg-green-500';
+                } else if (orchHealth.status === 'degraded') {
+                    healthIndicator.className = 'w-3 h-3 rounded-full bg-yellow-500';
+                } else {
+                    healthIndicator.className = 'w-3 h-3 rounded-full bg-red-500';
+                }
+            } catch (error) {
+                console.error('Failed to load orchestrator health:', error);
+            }
+
+            // Load agent statistics
+            try {
+                const agentsData = await api.listAgents();
+                const agents = agentsData.agents || [];
+
+                document.getElementById('totalAgents').textContent = agents.length;
+
+                const activeAgents = agents.filter(a => a.status === 'active').length;
+                document.getElementById('activeAgents').textContent = activeAgents;
+
+                if (agents.length > 0) {
+                    const avgRating = agents.reduce((sum, a) => sum + a.rating, 0) / agents.length;
+                    document.getElementById('avgRating').textContent = avgRating.toFixed(2) + '★';
+
+                    const totalTasks = agents.reduce((sum, a) => sum + a.tasks_completed, 0);
+                    document.getElementById('totalTasksCompleted').textContent = totalTasks.toLocaleString();
+                }
+            } catch (error) {
+                console.error('Failed to load agent statistics:', error);
+            }
+
+            // Refresh metrics every 30 seconds
+            setInterval(async () => {
+                try {
+                    const orchMetrics = await api.getOrchestratorMetrics();
+                    document.getElementById('orchTasksProcessed').textContent = orchMetrics.tasks_processed.toLocaleString();
+                    document.getElementById('orchSuccessRate').textContent = orchMetrics.success_rate.toFixed(1) + '%';
+                    document.getElementById('orchAvgExecution').textContent = orchMetrics.avg_execution_ms + 'ms';
+                    document.getElementById('orchActiveWorkers').textContent = orchMetrics.active_workers;
+                    document.getElementById('orchFailedTasks').textContent = orchMetrics.tasks_failed.toLocaleString();
+                } catch (error) {
+                    console.error('Failed to refresh metrics:', error);
+                }
+            }, 30000);
         });
     </script>
 </body>
