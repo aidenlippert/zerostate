@@ -19,10 +19,4 @@ use (
 	./libs/routing
 	./libs/search
 	./libs/telemetry
-	./services/bootnode
-	./services/edge-node
-	./services/relay
-	./tests/e2e
-	./tests/integration
-	./tools/cli
 )
