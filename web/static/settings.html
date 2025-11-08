@@ -105,7 +105,8 @@
                                         <p class="text-[#A0A0A0] text-base font-normal leading-normal" id="userId">ID: ZS-loading...</p>
                                     </div>
                                 </div>
-                                <button class="flex min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-white/10 text-white text-sm font-medium leading-normal tracking-[0.015em] w-full max-w-[480px] @[480px]:w-auto hover:bg-white/20 transition-colors">
+                                <input type="file" id="avatarInput" accept="image/jpeg,image/png,image/gif,image/webp" class="hidden">
+                                <button id="uploadAvatarBtn" class="flex min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-white/10 text-white text-sm font-medium leading-normal tracking-[0.015em] w-full max-w-[480px] @[480px]:w-auto hover:bg-white/20 transition-colors">
                                     <span class="truncate">Upload New Photo</span>
                                 </button>
                             </div>
@@ -207,6 +208,73 @@
             e.preventDefault();
             auth.logout();
             window.location.href = '/login.html';
+        });
+
+        // Avatar upload functionality
+        const uploadAvatarBtn = document.getElementById('uploadAvatarBtn');
+        const avatarInput = document.getElementById('avatarInput');
+
+        uploadAvatarBtn.addEventListener('click', function() {
+            avatarInput.click();
+        });
+
+        avatarInput.addEventListener('change', async function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            // Validate file size (5MB)
+            if (file.size > 5 * 1024 * 1024) {
+                alert('File size must be less than 5MB');
+                return;
+            }
+
+            // Validate file type
+            const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+            if (!validTypes.includes(file.type)) {
+                alert('Please upload a JPEG, PNG, GIF, or WebP image');
+                return;
+            }
+
+            // Create form data
+            const formData = new FormData();
+            formData.append('avatar', file);
+
+            try {
+                // Show loading state
+                uploadAvatarBtn.disabled = true;
+                uploadAvatarBtn.querySelector('span').textContent = 'Uploading...';
+
+                const response = await fetch('/api/v1/users/me/avatar', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${auth.getToken()}`
+                    },
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.message || 'Upload failed');
+                }
+
+                const data = await response.json();
+
+                // Update avatar images
+                const avatarUrl = data.avatar_url;
+                document.getElementById('profileAvatar').style.backgroundImage = `url("${avatarUrl}")`;
+                document.getElementById('sidebarAvatar').style.backgroundImage = `url("${avatarUrl}")`;
+
+                alert('Avatar uploaded successfully!');
+            } catch (error) {
+                console.error('Avatar upload error:', error);
+                alert('Failed to upload avatar: ' + error.message);
+            } finally {
+                // Reset button state
+                uploadAvatarBtn.disabled = false;
+                uploadAvatarBtn.querySelector('span').textContent = 'Upload New Photo';
+                // Clear the input
+                avatarInput.value = '';
+            }
         });
     </script>
 </body>

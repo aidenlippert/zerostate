@@ -186,3 +186,68 @@ func (h *Handlers) GetCurrentUser(c *gin.Context) {
 		CreatedAt: user.CreatedAt.Format(time.RFC3339),
 	})
 }
+
+// UploadAvatar handles user avatar upload
+// For simplicity, this returns a placeholder URL
+// In production, this would upload to cloud storage (S3, GCS, etc.)
+func (h *Handlers) UploadAvatar(c *gin.Context) {
+	// Get user ID from context (set by auth middleware)
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	// Parse multipart form (10MB max)
+	if err := c.Request.ParseMultipartForm(10 << 20); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "invalid request",
+			"message": "failed to parse form data",
+		})
+		return
+	}
+
+	// Get file from request
+	file, header, err := c.Request.FormFile("avatar")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "invalid request",
+			"message": "no file uploaded",
+		})
+		return
+	}
+	defer file.Close()
+
+	// Validate file type (only images)
+	contentType := header.Header.Get("Content-Type")
+	if contentType != "image/jpeg" && contentType != "image/png" && contentType != "image/gif" && contentType != "image/webp" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "invalid file type",
+			"message": "only image files (JPEG, PNG, GIF, WebP) are allowed",
+		})
+		return
+	}
+
+	// Validate file size (max 5MB)
+	if header.Size > 5<<20 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "file too large",
+			"message": "maximum file size is 5MB",
+		})
+		return
+	}
+
+	// In a real implementation, you would:
+	// 1. Generate a unique filename
+	// 2. Upload to cloud storage (S3, GCS, Cloudinary, etc.)
+	// 3. Store the URL in the database
+	// 4. Return the URL
+
+	// For now, return a placeholder URL with user ID
+	avatarURL := "https://ui-avatars.com/api/?name=" + userID.(string) + "&size=200&background=4A90E2&color=fff"
+
+	c.JSON(http.StatusOK, gin.H{
+		"avatar_url": avatarURL,
+		"message":    "avatar uploaded successfully",
+	})
+}

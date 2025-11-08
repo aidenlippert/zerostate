@@ -169,6 +169,7 @@ func (s *Server) setupRoutes() {
 			{
 				protected.POST("/logout", s.handlers.LogoutUser)
 				protected.GET("/me", s.handlers.GetCurrentUser)
+				protected.POST("/me/avatar", s.handlers.UploadAvatar)
 			}
 		}
 
