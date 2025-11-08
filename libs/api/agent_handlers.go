@@ -281,21 +281,74 @@ func convertToCapabilities(names []string, pricing *AgentPricing) []identity.Cap
 // GetAgent retrieves an agent by ID
 func (h *Handlers) GetAgent(c *gin.Context) {
 	agentID := c.Param("id")
+	logger := h.logger.With(zap.String("handler", "GetAgent"), zap.String("agent_id", agentID))
 
-	// TODO: Retrieve agent from store
-	c.JSON(http.StatusNotImplemented, gin.H{
-		"error":   "not implemented",
-		"message": "GetAgent endpoint not yet implemented",
-		"agent_id": agentID,
-	})
+	// Mock data for now - will be replaced with database query
+	agent := gin.H{
+		"id":          agentID,
+		"name":        "DataWeaver",
+		"description": "Advanced data analysis agent for ETL processing and database management",
+		"capabilities": []string{"data_analysis", "etl", "database"},
+		"status":      "active",
+		"price":       0.02,
+		"tasks_completed": 1200000,
+		"rating":      4.9,
+		"created_at":  time.Now().Add(-30 * 24 * time.Hour).Format(time.RFC3339),
+		"updated_at":  time.Now().Add(-1 * 24 * time.Hour).Format(time.RFC3339),
+	}
+
+	logger.Info("retrieved agent")
+	c.JSON(http.StatusOK, agent)
 }
 
 // ListAgents lists all agents with pagination
 func (h *Handlers) ListAgents(c *gin.Context) {
-	// TODO: Implement pagination and filtering
-	c.JSON(http.StatusNotImplemented, gin.H{
-		"error":   "not implemented",
-		"message": "ListAgents endpoint not yet implemented",
+	logger := h.logger.With(zap.String("handler", "ListAgents"))
+
+	// Mock data for now - will be replaced with database query
+	agents := []gin.H{
+		{
+			"id":          "agent_001",
+			"name":        "DataWeaver",
+			"description": "Advanced data analysis agent for ETL processing and database management",
+			"capabilities": []string{"data_analysis", "etl", "database"},
+			"status":      "active",
+			"price":       0.02,
+			"tasks_completed": 1200000,
+			"rating":      4.9,
+			"created_at":  time.Now().Add(-30 * 24 * time.Hour).Format(time.RFC3339),
+		},
+		{
+			"id":          "agent_002",
+			"name":        "Synth-Net",
+			"description": "API integration and data synchronization specialist",
+			"capabilities": []string{"api", "sync", "integration"},
+			"status":      "active",
+			"price":       0.05,
+			"tasks_completed": 890000,
+			"rating":      4.8,
+			"created_at":  time.Now().Add(-20 * 24 * time.Hour).Format(time.RFC3339),
+		},
+		{
+			"id":          "agent_003",
+			"name":        "Code-Gen X",
+			"description": "Automated code generation and refactoring assistant",
+			"capabilities": []string{"code_gen", "refactor", "testing"},
+			"status":      "active",
+			"price":       25.00,
+			"tasks_completed": 450000,
+			"rating":      4.7,
+			"created_at":  time.Now().Add(-15 * 24 * time.Hour).Format(time.RFC3339),
+		},
+	}
+
+	logger.Info("listing agents", zap.Int("count", len(agents)))
+
+	c.JSON(http.StatusOK, gin.H{
+		"agents":      agents,
+		"total":       len(agents),
+		"page":        1,
+		"total_pages": 1,
 	})
 }
 
