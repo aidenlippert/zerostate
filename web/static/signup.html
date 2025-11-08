@@ -286,16 +286,46 @@
                 return;
             }
 
-            // TODO: Submit to backend API
-            console.log('Form submitted:', {
-                fullName: document.getElementById('full-name').value,
+            // Submit to backend API
+            const formData = {
+                full_name: document.getElementById('full-name').value,
                 email: document.getElementById('email').value,
-                password: password,
-                termsAccepted: document.getElementById('terms').checked
-            });
+                password: password
+            };
 
-            // Redirect to dashboard after successful signup
-            // window.location.href = '/dashboard.html';
+            console.log('Submitting to API:', formData);
+
+            // Determine API URL based on environment
+            const API_BASE_URL = window.location.hostname.includes('vercel.app')
+                ? 'https://zerostate-api.fly.dev/api/v1'
+                : window.location.origin + '/api/v1';
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/users/register`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    // Save token and user data
+                    localStorage.setItem('zerostate_auth_token', data.token);
+                    localStorage.setItem('zerostate_user_data', JSON.stringify(data.user));
+
+                    // Redirect to dashboard
+                    window.location.href = '/dashboard.html';
+                } else {
+                    // Show error message
+                    alert(data.error || 'Registration failed. Please try again.');
+                }
+            } catch (error) {
+                console.error('Registration error:', error);
+                alert('Network error. Please check your connection and try again.');
+            }
         });
     </script>
 </body>
