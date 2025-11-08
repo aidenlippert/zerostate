@@ -1,11 +1,5 @@
 {
   "version": 2,
-  "name": "zerostate-frontend",
-  "buildCommand": "echo 'No build needed for static site'",
-  "devCommand": "python3 -m http.server 3000 --directory web/static",
-  "installCommand": "echo 'No install needed'",
-  "framework": null,
-  "outputDirectory": "web/static",
   "rewrites": [
     {
       "source": "/(.*)",
@@ -30,8 +24,5 @@
         }
       ]
     }
-  ],
-  "env": {
-    "API_BASE_URL": "@api_base_url"
-  }
+  ]
 }
