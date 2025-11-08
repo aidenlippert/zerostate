@@ -216,6 +216,18 @@ class APIClient {
     async getOrchestratorHealth() {
         return this.request('/orchestrator/health');
     }
+
+    // User endpoints
+    async getCurrentUser() {
+        return this.request('/users/me');
+    }
+
+    async updateUserProfile(userData) {
+        return this.request('/users/me', {
+            method: 'PUT',
+            body: JSON.stringify(userData),
+        });
+    }
 }
 
 // ======================
