@@ -3,14 +3,17 @@ package database
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/lib/pq"           // PostgreSQL driver
+	_ "github.com/mattn/go-sqlite3" // SQLite driver
 )
 
 // DB wraps the database connection
 type DB struct {
-	conn *sql.DB
+	conn       *sql.DB
+	driverName string
 }
 
 // User represents a user in the database
@@ -24,8 +27,24 @@ type User struct {
 }
 
 // NewDB creates a new database connection
-func NewDB(dbPath string) (*DB, error) {
-	conn, err := sql.Open("sqlite3", dbPath)
+// Supports both SQLite (local dev) and PostgreSQL (production/Supabase)
+// Examples:
+//   - SQLite: NewDB("./zerostate.db")
+//   - PostgreSQL: NewDB("postgres://user:pass@host:5432/dbname")
+func NewDB(connectionString string) (*DB, error) {
+	var driverName string
+	var conn *sql.DB
+	var err error
+
+	// Detect database type from connection string
+	if strings.HasPrefix(connectionString, "postgres://") || strings.HasPrefix(connectionString, "postgresql://") {
+		driverName = "postgres"
+		conn, err = sql.Open("postgres", connectionString)
+	} else {
+		driverName = "sqlite3"
+		conn, err = sql.Open("sqlite3", connectionString)
+	}
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
@@ -34,7 +53,10 @@ func NewDB(dbPath string) (*DB, error) {
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	db := &DB{conn: conn}
+	db := &DB{
+		conn:       conn,
+		driverName: driverName,
+	}
 
 	// Initialize schema
 	if err := db.initSchema(); err != nil {
@@ -46,21 +68,46 @@ func NewDB(dbPath string) (*DB, error) {
 
 // initSchema creates the database tables
 func (db *DB) initSchema() error {
-	schema := `
-	CREATE TABLE IF NOT EXISTS users (
-		id TEXT PRIMARY KEY,
-		full_name TEXT NOT NULL,
-		email TEXT UNIQUE NOT NULL,
-		password_hash TEXT NOT NULL,
-		created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-		updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-	);
+	var schema string
 
-	CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
-	`
+	if db.driverName == "postgres" {
+		schema = `
+		CREATE TABLE IF NOT EXISTS users (
+			id VARCHAR(255) PRIMARY KEY,
+			full_name VARCHAR(255) NOT NULL,
+			email VARCHAR(255) UNIQUE NOT NULL,
+			password_hash VARCHAR(255) NOT NULL,
+			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+		`
+	} else {
+		schema = `
+		CREATE TABLE IF NOT EXISTS users (
+			id TEXT PRIMARY KEY,
+			full_name TEXT NOT NULL,
+			email TEXT UNIQUE NOT NULL,
+			password_hash TEXT NOT NULL,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+		`
+	}
 
 	_, err := db.conn.Exec(schema)
 	return err
+}
+
+// placeholder returns the correct parameter placeholder for the database driver
+func (db *DB) placeholder(n int) string {
+	if db.driverName == "postgres" {
+		return fmt.Sprintf("$%d", n)
+	}
+	return "?"
 }
 
 // Close closes the database connection
@@ -70,10 +117,18 @@ func (db *DB) Close() error {
 
 // CreateUser creates a new user
 func (db *DB) CreateUser(user *User) error {
-	query := `
-		INSERT INTO users (id, full_name, email, password_hash, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?)
-	`
+	var query string
+	if db.driverName == "postgres" {
+		query = `
+			INSERT INTO users (id, full_name, email, password_hash, created_at, updated_at)
+			VALUES ($1, $2, $3, $4, $5, $6)
+		`
+	} else {
+		query = `
+			INSERT INTO users (id, full_name, email, password_hash, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?)
+		`
+	}
 
 	_, err := db.conn.Exec(
 		query,
@@ -94,11 +149,12 @@ func (db *DB) CreateUser(user *User) error {
 
 // GetUserByEmail retrieves a user by email
 func (db *DB) GetUserByEmail(email string) (*User, error) {
-	query := `
-		SELECT id, full_name, email, password_hash, created_at, updated_at
-		FROM users
-		WHERE email = ?
-	`
+	var query string
+	if db.driverName == "postgres" {
+		query = `SELECT id, full_name, email, password_hash, created_at, updated_at FROM users WHERE email = $1`
+	} else {
+		query = `SELECT id, full_name, email, password_hash, created_at, updated_at FROM users WHERE email = ?`
+	}
 
 	user := &User{}
 	err := db.conn.QueryRow(query, email).Scan(
@@ -123,11 +179,12 @@ func (db *DB) GetUserByEmail(email string) (*User, error) {
 
 // GetUserByID retrieves a user by ID
 func (db *DB) GetUserByID(id string) (*User, error) {
-	query := `
-		SELECT id, full_name, email, password_hash, created_at, updated_at
-		FROM users
-		WHERE id = ?
-	`
+	var query string
+	if db.driverName == "postgres" {
+		query = `SELECT id, full_name, email, password_hash, created_at, updated_at FROM users WHERE id = $1`
+	} else {
+		query = `SELECT id, full_name, email, password_hash, created_at, updated_at FROM users WHERE id = ?`
+	}
 
 	user := &User{}
 	err := db.conn.QueryRow(query, id).Scan(
@@ -152,11 +209,12 @@ func (db *DB) GetUserByID(id string) (*User, error) {
 
 // UpdateUser updates a user
 func (db *DB) UpdateUser(user *User) error {
-	query := `
-		UPDATE users
-		SET full_name = ?, email = ?, password_hash = ?, updated_at = ?
-		WHERE id = ?
-	`
+	var query string
+	if db.driverName == "postgres" {
+		query = `UPDATE users SET full_name = $1, email = $2, password_hash = $3, updated_at = $4 WHERE id = $5`
+	} else {
+		query = `UPDATE users SET full_name = ?, email = ?, password_hash = ?, updated_at = ? WHERE id = ?`
+	}
 
 	user.UpdatedAt = time.Now()
 
@@ -178,7 +236,12 @@ func (db *DB) UpdateUser(user *User) error {
 
 // DeleteUser deletes a user
 func (db *DB) DeleteUser(id string) error {
-	query := `DELETE FROM users WHERE id = ?`
+	var query string
+	if db.driverName == "postgres" {
+		query = `DELETE FROM users WHERE id = $1`
+	} else {
+		query = `DELETE FROM users WHERE id = ?`
+	}
 
 	_, err := db.conn.Exec(query, id)
 	if err != nil {

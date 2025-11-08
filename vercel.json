@@ -1,0 +1,37 @@
+{
+  "version": 2,
+  "name": "zerostate-frontend",
+  "buildCommand": "echo 'No build needed for static site'",
+  "devCommand": "python3 -m http.server 3000 --directory web/static",
+  "installCommand": "echo 'No install needed'",
+  "framework": null,
+  "outputDirectory": "web/static",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        },
+        {
+          "key": "Access-Control-Allow-Methods",
+          "value": "GET, POST, PUT, DELETE, OPTIONS"
+        },
+        {
+          "key": "Access-Control-Allow-Headers",
+          "value": "Content-Type, Authorization"
+        }
+      ]
+    }
+  ],
+  "env": {
+    "API_BASE_URL": "@api_base_url"
+  }
+}

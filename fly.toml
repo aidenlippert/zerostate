@@ -1,0 +1,38 @@
+# Fly.io deployment configuration for ZeroState API
+# Run: fly launch (first time) or fly deploy (subsequent deploys)
+
+app = "zerostate-api"
+primary_region = "sjc" # San Jose - change to your preferred region
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8080"
+  HOST = "0.0.0.0"
+  ORCHESTRATOR_WORKERS = "5"
+  ENABLE_METRICS = "true"
+  ENABLE_TRACING = "true"
+
+# Set these secrets with: fly secrets set JWT_SECRET=your-secret DATABASE_URL=your-postgres-url
+# DATABASE_URL should be your Supabase PostgreSQL connection string
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["app"]
+
+  [[http_service.checks]]
+    interval = "15s"
+    timeout = "2s"
+    grace_period = "5s"
+    method = "GET"
+    path = "/health"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 512

@@ -1,0 +1,27 @@
+# Render.com deployment configuration for ZeroState
+# Connect your GitHub repo to Render and it will auto-deploy
+
+services:
+  - type: web
+    name: zerostate-api
+    env: docker
+    plan: free  # Change to 'starter' or 'standard' for production
+    region: oregon  # Change to your preferred region
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: 8080
+      - key: HOST
+        value: 0.0.0.0
+      - key: ORCHESTRATOR_WORKERS
+        value: 5
+      - key: ENABLE_METRICS
+        value: true
+      - key: ENABLE_TRACING
+        value: true
+      - key: DATABASE_URL
+        sync: false  # Set this as a secret in Render dashboard
+      - key: JWT_SECRET
+        generateValue: true  # Render will auto-generate a secure secret
+    autoDeploy: true
