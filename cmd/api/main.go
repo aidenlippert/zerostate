@@ -14,6 +14,7 @@ import (
 	"github.com/aidenlippert/zerostate/libs/identity"
 	"github.com/aidenlippert/zerostate/libs/orchestration"
 	"github.com/aidenlippert/zerostate/libs/search"
+	"github.com/aidenlippert/zerostate/libs/storage"
 	"github.com/libp2p/go-libp2p"
 	"go.uber.org/zap"
 )
@@ -111,9 +112,37 @@ func main() {
 	defer orch.Stop()
 	logger.Info("orchestrator started successfully")
 
+	// Initialize S3 storage (optional)
+	var s3Storage *storage.S3Storage
+	if bucket := os.Getenv("S3_BUCKET"); bucket != "" {
+		logger.Info("initializing S3 storage")
+		s3Config := &storage.S3Config{
+			Bucket:          bucket,
+			Region:          getEnv("S3_REGION", "us-east-1"),
+			AccessKeyID:     os.Getenv("AWS_ACCESS_KEY_ID"),
+			SecretAccessKey: os.Getenv("AWS_SECRET_ACCESS_KEY"),
+			Endpoint:        os.Getenv("S3_ENDPOINT"), // For LocalStack/MinIO
+		}
+		var err error
+		s3Storage, err = storage.NewS3Storage(ctx, s3Config, logger)
+		if err != nil {
+			logger.Warn("failed to initialize S3 storage, uploads will use placeholder URLs",
+				zap.Error(err),
+			)
+			s3Storage = nil
+		} else {
+			logger.Info("S3 storage initialized successfully",
+				zap.String("bucket", s3Config.Bucket),
+				zap.String("region", s3Config.Region),
+			)
+		}
+	} else {
+		logger.Info("S3 storage not configured (set S3_BUCKET env var to enable)")
+	}
+
 	// Initialize API handlers
 	logger.Info("initializing API handlers")
-	handlers := api.NewHandlers(ctx, logger, p2pHost, signer, hnsw, taskQueue, orch, db)
+	handlers := api.NewHandlers(ctx, logger, p2pHost, signer, hnsw, taskQueue, orch, db, s3Storage)
 
 	// Create API server
 	logger.Info("creating API server")
@@ -204,4 +233,12 @@ func main() {
 
 	fmt.Printf("\n✨ Shutdown complete. Goodbye!\n\n")
 	logger.Info("shutdown complete")
+}
+
+// getEnv returns environment variable value or default
+func getEnv(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
 }

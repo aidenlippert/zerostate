@@ -21,3 +21,4 @@ use (
 	./libs/telemetry
 	./libs/validation
 )
+use ./libs/storage

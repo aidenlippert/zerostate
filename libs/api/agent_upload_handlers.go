@@ -156,9 +156,36 @@ func (h *Handlers) UploadAgent(c *gin.Context) {
 	// Generate agent ID
 	agentID := uuid.New().String()
 
-	// TODO: Upload to S3/IPFS/Cloud Storage
-	// For now, generate placeholder URL
-	binaryURL := fmt.Sprintf("https://storage.zerostate.ai/agents/%s/%s.wasm", agentID, fileHash)
+	// Upload to S3 storage
+	var binaryURL string
+	if h.s3Storage != nil {
+		// Generate S3 key: agents/{agentID}/{hash}.wasm
+		s3Key := fmt.Sprintf("agents/%s/%s.wasm", agentID, fileHash)
+
+		// Upload to S3
+		uploadedURL, err := h.s3Storage.Upload(c.Request.Context(), s3Key, fileContent, "application/wasm")
+		if err != nil {
+			logger.Error("failed to upload to S3",
+				zap.Error(err),
+				zap.String("key", s3Key),
+			)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":   "storage error",
+				"message": "failed to upload agent binary to storage",
+			})
+			return
+		}
+
+		binaryURL = uploadedURL
+		logger.Info("agent binary uploaded to S3",
+			zap.String("key", s3Key),
+			zap.String("url", binaryURL),
+		)
+	} else {
+		// Fallback to placeholder URL if S3 not configured
+		binaryURL = fmt.Sprintf("https://storage.zerostate.ai/agents/%s/%s.wasm", agentID, fileHash)
+		logger.Warn("S3 storage not configured, using placeholder URL")
+	}
 
 	// Parse metadata from form
 	var metadata UploadAgentRequest
@@ -207,11 +234,22 @@ func (h *Handlers) GetAgentBinary(c *gin.Context) {
 		zap.String("agent_id", agentID),
 	)
 
-	// TODO: Retrieve binary from S3/IPFS/Cloud Storage
-	// For now, return 404
-	c.JSON(http.StatusNotFound, gin.H{
-		"error":   "not found",
-		"message": "agent binary storage not yet implemented",
+	if h.s3Storage == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error":   "not configured",
+			"message": "storage service not configured",
+		})
+		return
+	}
+
+	// TODO: Get binary hash from database
+	// For now, return signed URL for direct S3 access
+	// In production, we would query the database to get the actual S3 key
+
+	c.JSON(http.StatusNotImplemented, gin.H{
+		"error":   "not implemented",
+		"message": "binary retrieval requires database integration for key lookup",
+		"note":    "use signed URL from upload response for now",
 	})
 }
 

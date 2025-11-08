@@ -7,6 +7,7 @@ import (
 	"github.com/aidenlippert/zerostate/libs/identity"
 	"github.com/aidenlippert/zerostate/libs/orchestration"
 	"github.com/aidenlippert/zerostate/libs/search"
+	"github.com/aidenlippert/zerostate/libs/storage"
 	"github.com/libp2p/go-libp2p/core/host"
 	"go.uber.org/zap"
 )
@@ -21,6 +22,7 @@ type Handlers struct {
 	taskQueue    *orchestration.TaskQueue
 	orchestrator *orchestration.Orchestrator
 	db           *database.DB
+	s3Storage    *storage.S3Storage
 
 	// Services (to be added)
 	// userManager    *auth.UserManager
@@ -39,6 +41,7 @@ func NewHandlers(
 	taskQueue *orchestration.TaskQueue,
 	orchestrator *orchestration.Orchestrator,
 	db *database.DB,
+	s3Storage *storage.S3Storage,
 ) *Handlers {
 	if logger == nil {
 		logger = zap.NewNop()
@@ -52,6 +55,7 @@ func NewHandlers(
 		taskQueue:    taskQueue,
 		orchestrator: orchestrator,
 		db:           db,
+		s3Storage:    s3Storage,
 		ctx:          ctx,
 	}
 }
