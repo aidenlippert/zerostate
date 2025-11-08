@@ -11,6 +11,7 @@ import (
 
 	"github.com/aidenlippert/zerostate/libs/api"
 	"github.com/aidenlippert/zerostate/libs/database"
+	"github.com/aidenlippert/zerostate/libs/execution"
 	"github.com/aidenlippert/zerostate/libs/identity"
 	"github.com/aidenlippert/zerostate/libs/orchestration"
 	"github.com/aidenlippert/zerostate/libs/search"
@@ -92,12 +93,40 @@ func main() {
 	defer taskQueue.Close()
 	logger.Info("task queue initialized")
 
+	// Initialize WASM execution components
+	logger.Info("initializing WASM execution components")
+
+	// Create WASM runner with 5-minute timeout
+	wasmRunner := execution.NewWASMRunner(logger, 5*time.Minute)
+
+	// Create result store with database connection
+	resultStore := execution.NewPostgresResultStore(db.Conn(), logger)
+
+	// Create adapters for TaskExecutor interfaces
+	var binaryStore execution.BinaryStore
+	if s3Storage != nil {
+		binaryStore = execution.NewS3BinaryStore(s3Storage, db)
+	}
+
+	logger.Info("WASM execution components initialized")
+
 	// Initialize orchestrator components
 	logger.Info("initializing orchestrator components")
 
 	// Use database-backed agent selector with meta-agent auction
 	selector := orchestration.NewDatabaseAgentSelector(db, orchestration.DefaultMetaAgentConfig(), logger)
-	executor := orchestration.NewMockTaskExecutor(logger)
+
+	// Use real WASM executor if S3 is configured, otherwise use mock
+	var executor orchestration.TaskExecutor
+	if binaryStore != nil {
+		// Note: Full TaskExecutor integration requires adapter implementations
+		// For now, continue using mock until adapters are complete
+		executor = orchestration.NewMockTaskExecutor(logger)
+		logger.Info("using mock task executor (WASM components ready, adapters pending)")
+	} else {
+		executor = orchestration.NewMockTaskExecutor(logger)
+		logger.Info("using mock task executor (S3 not configured)")
+	}
 
 	orchConfig := orchestration.DefaultOrchestratorConfig()
 	orchConfig.NumWorkers = *workers

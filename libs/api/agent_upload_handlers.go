@@ -3,11 +3,14 @@ package api
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"path/filepath"
+	"time"
 
+	"github.com/aidenlippert/zerostate/libs/database"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -172,8 +175,59 @@ func (h *Handlers) UploadAgent(c *gin.Context) {
 		return
 	}
 
-	// TODO: Store agent metadata in database
-	// For now, just return success response
+	// Store agent metadata in database
+	capabilitiesJSON, err := json.Marshal(metadata.Capabilities)
+	if err != nil {
+		logger.Error("failed to marshal capabilities",
+			zap.Error(err),
+		)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "metadata error",
+			"message": "failed to process capabilities",
+		})
+		return
+	}
+
+	now := time.Now()
+	agent := &database.Agent{
+		ID:             agentID,
+		UserID:         userID.(string),
+		Name:           metadata.Name,
+		Description:    metadata.Description,
+		Version:        metadata.Version,
+		Capabilities:   string(capabilitiesJSON),
+		Status:         "active",
+		Price:          metadata.Price,
+		BinaryURL:      binaryURL,
+		BinaryHash:     fileHash,
+		BinarySize:     header.Size,
+		TasksCompleted: 0,
+		Rating:         0.0,
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	}
+
+	if h.db != nil {
+		err = h.db.CreateAgent(agent)
+		if err != nil {
+			logger.Error("failed to store agent in database",
+				zap.Error(err),
+				zap.String("agent_id", agentID),
+			)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":   "database error",
+				"message": "failed to store agent metadata",
+			})
+			return
+		}
+		logger.Info("agent metadata stored in database",
+			zap.String("agent_id", agentID),
+			zap.String("user_id", userID.(string)),
+		)
+	} else {
+		logger.Warn("database not configured, agent metadata not persisted")
+	}
+
 	logger.Info("agent uploaded successfully",
 		zap.String("agent_id", agentID),
 		zap.String("user_id", userID.(string)),

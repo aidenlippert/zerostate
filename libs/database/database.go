@@ -29,11 +29,16 @@ type User struct {
 // Agent represents an agent in the database
 type Agent struct {
 	ID             string    `json:"id"`
+	UserID         string    `json:"user_id"`         // Owner of the agent
 	Name           string    `json:"name"`
 	Description    string    `json:"description"`
-	Capabilities   string    `json:"capabilities"` // JSON array stored as string
+	Version        string    `json:"version"`
+	Capabilities   string    `json:"capabilities"`    // JSON array stored as string
 	Status         string    `json:"status"`
 	Price          float64   `json:"price"`
+	BinaryURL      string    `json:"binary_url"`      // S3 URL to WASM binary
+	BinaryHash     string    `json:"binary_hash"`     // SHA-256 hash
+	BinarySize     int64     `json:"binary_size"`     // Size in bytes
 	TasksCompleted int64     `json:"tasks_completed"`
 	Rating         float64   `json:"rating"`
 	CreatedAt      time.Time `json:"created_at"`
@@ -111,17 +116,24 @@ func (db *DB) initSchema() error {
 
 		CREATE TABLE IF NOT EXISTS agents (
 			id VARCHAR(255) PRIMARY KEY,
+			user_id VARCHAR(255) NOT NULL,
 			name VARCHAR(255) NOT NULL,
 			description TEXT NOT NULL,
+			version VARCHAR(50) NOT NULL,
 			capabilities TEXT NOT NULL,
 			status VARCHAR(50) NOT NULL DEFAULT 'active',
 			price DECIMAL(10,2) NOT NULL DEFAULT 0.0,
+			binary_url TEXT NOT NULL,
+			binary_hash VARCHAR(64) NOT NULL,
+			binary_size BIGINT NOT NULL,
 			tasks_completed BIGINT NOT NULL DEFAULT 0,
 			rating DECIMAL(3,2) NOT NULL DEFAULT 0.0,
 			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 		);
 
+		CREATE INDEX IF NOT EXISTS idx_agents_user ON agents(user_id);
 		CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status);
 		CREATE INDEX IF NOT EXISTS idx_agents_rating ON agents(rating);
 
@@ -141,6 +153,20 @@ func (db *DB) initSchema() error {
 		CREATE INDEX IF NOT EXISTS idx_deployments_agent ON agent_deployments(agent_id);
 		CREATE INDEX IF NOT EXISTS idx_deployments_user ON agent_deployments(user_id);
 		CREATE INDEX IF NOT EXISTS idx_deployments_status ON agent_deployments(status);
+
+		CREATE TABLE IF NOT EXISTS task_results (
+			task_id VARCHAR(255) PRIMARY KEY,
+			agent_id VARCHAR(255) NOT NULL,
+			exit_code INTEGER NOT NULL,
+			stdout BYTEA,
+			stderr BYTEA,
+			duration_ms BIGINT NOT NULL,
+			error TEXT,
+			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_task_results_agent ON task_results(agent_id);
+		CREATE INDEX IF NOT EXISTS idx_task_results_created ON task_results(created_at);
 		`
 	} else {
 		schema = `
@@ -157,17 +183,24 @@ func (db *DB) initSchema() error {
 
 		CREATE TABLE IF NOT EXISTS agents (
 			id TEXT PRIMARY KEY,
+			user_id TEXT NOT NULL,
 			name TEXT NOT NULL,
 			description TEXT NOT NULL,
+			version TEXT NOT NULL,
 			capabilities TEXT NOT NULL,
 			status TEXT NOT NULL DEFAULT 'active',
 			price REAL NOT NULL DEFAULT 0.0,
+			binary_url TEXT NOT NULL,
+			binary_hash TEXT NOT NULL,
+			binary_size INTEGER NOT NULL,
 			tasks_completed INTEGER NOT NULL DEFAULT 0,
 			rating REAL NOT NULL DEFAULT 0.0,
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 		);
 
+		CREATE INDEX IF NOT EXISTS idx_agents_user ON agents(user_id);
 		CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status);
 		CREATE INDEX IF NOT EXISTS idx_agents_rating ON agents(rating);
 
@@ -187,6 +220,20 @@ func (db *DB) initSchema() error {
 		CREATE INDEX IF NOT EXISTS idx_deployments_agent ON agent_deployments(agent_id);
 		CREATE INDEX IF NOT EXISTS idx_deployments_user ON agent_deployments(user_id);
 		CREATE INDEX IF NOT EXISTS idx_deployments_status ON agent_deployments(status);
+
+		CREATE TABLE IF NOT EXISTS task_results (
+			task_id TEXT PRIMARY KEY,
+			agent_id TEXT NOT NULL,
+			exit_code INTEGER NOT NULL,
+			stdout BLOB,
+			stderr BLOB,
+			duration_ms INTEGER NOT NULL,
+			error TEXT,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_task_results_agent ON task_results(agent_id);
+		CREATE INDEX IF NOT EXISTS idx_task_results_created ON task_results(created_at);
 		`
 	}
 
@@ -205,6 +252,11 @@ func (db *DB) placeholder(n int) string {
 // Close closes the database connection
 func (db *DB) Close() error {
 	return db.conn.Close()
+}
+
+// Conn returns the underlying sql.DB connection
+func (db *DB) Conn() *sql.DB {
+	return db.conn
 }
 
 // CreateUser creates a new user
@@ -348,24 +400,29 @@ func (db *DB) CreateAgent(agent *Agent) error {
 	var query string
 	if db.driverName == "postgres" {
 		query = `
-			INSERT INTO agents (id, name, description, capabilities, status, price, tasks_completed, rating, created_at, updated_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+			INSERT INTO agents (id, user_id, name, description, version, capabilities, status, price, binary_url, binary_hash, binary_size, tasks_completed, rating, created_at, updated_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 		`
 	} else {
 		query = `
-			INSERT INTO agents (id, name, description, capabilities, status, price, tasks_completed, rating, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			INSERT INTO agents (id, user_id, name, description, version, capabilities, status, price, binary_url, binary_hash, binary_size, tasks_completed, rating, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`
 	}
 
 	_, err := db.conn.Exec(
 		query,
 		agent.ID,
+		agent.UserID,
 		agent.Name,
 		agent.Description,
+		agent.Version,
 		agent.Capabilities,
 		agent.Status,
 		agent.Price,
+		agent.BinaryURL,
+		agent.BinaryHash,
+		agent.BinarySize,
 		agent.TasksCompleted,
 		agent.Rating,
 		agent.CreatedAt,
@@ -383,19 +440,24 @@ func (db *DB) CreateAgent(agent *Agent) error {
 func (db *DB) GetAgentByID(id string) (*Agent, error) {
 	var query string
 	if db.driverName == "postgres" {
-		query = `SELECT id, name, description, capabilities, status, price, tasks_completed, rating, created_at, updated_at FROM agents WHERE id = $1`
+		query = `SELECT id, user_id, name, description, version, capabilities, status, price, binary_url, binary_hash, binary_size, tasks_completed, rating, created_at, updated_at FROM agents WHERE id = $1`
 	} else {
-		query = `SELECT id, name, description, capabilities, status, price, tasks_completed, rating, created_at, updated_at FROM agents WHERE id = ?`
+		query = `SELECT id, user_id, name, description, version, capabilities, status, price, binary_url, binary_hash, binary_size, tasks_completed, rating, created_at, updated_at FROM agents WHERE id = ?`
 	}
 
 	agent := &Agent{}
 	err := db.conn.QueryRow(query, id).Scan(
 		&agent.ID,
+		&agent.UserID,
 		&agent.Name,
 		&agent.Description,
+		&agent.Version,
 		&agent.Capabilities,
 		&agent.Status,
 		&agent.Price,
+		&agent.BinaryURL,
+		&agent.BinaryHash,
+		&agent.BinarySize,
 		&agent.TasksCompleted,
 		&agent.Rating,
 		&agent.CreatedAt,
@@ -417,9 +479,9 @@ func (db *DB) GetAgentByID(id string) (*Agent, error) {
 func (db *DB) ListAgents() ([]*Agent, error) {
 	var query string
 	if db.driverName == "postgres" {
-		query = `SELECT id, name, description, capabilities, status, price, tasks_completed, rating, created_at, updated_at FROM agents ORDER BY rating DESC, tasks_completed DESC`
+		query = `SELECT id, user_id, name, description, version, capabilities, status, price, binary_url, binary_hash, binary_size, tasks_completed, rating, created_at, updated_at FROM agents ORDER BY rating DESC, tasks_completed DESC`
 	} else {
-		query = `SELECT id, name, description, capabilities, status, price, tasks_completed, rating, created_at, updated_at FROM agents ORDER BY rating DESC, tasks_completed DESC`
+		query = `SELECT id, user_id, name, description, version, capabilities, status, price, binary_url, binary_hash, binary_size, tasks_completed, rating, created_at, updated_at FROM agents ORDER BY rating DESC, tasks_completed DESC`
 	}
 
 	rows, err := db.conn.Query(query)
@@ -433,11 +495,16 @@ func (db *DB) ListAgents() ([]*Agent, error) {
 		agent := &Agent{}
 		err := rows.Scan(
 			&agent.ID,
+			&agent.UserID,
 			&agent.Name,
 			&agent.Description,
+			&agent.Version,
 			&agent.Capabilities,
 			&agent.Status,
 			&agent.Price,
+			&agent.BinaryURL,
+			&agent.BinaryHash,
+			&agent.BinarySize,
 			&agent.TasksCompleted,
 			&agent.Rating,
 			&agent.CreatedAt,
@@ -463,7 +530,7 @@ func (db *DB) SearchAgents(query string) ([]*Agent, error) {
 
 	if db.driverName == "postgres" {
 		sqlQuery = `
-			SELECT id, name, description, capabilities, status, price, tasks_completed, rating, created_at, updated_at
+			SELECT id, user_id, name, description, version, capabilities, status, price, binary_url, binary_hash, binary_size, tasks_completed, rating, created_at, updated_at
 			FROM agents
 			WHERE LOWER(name) LIKE $1
 			   OR LOWER(description) LIKE $1
@@ -472,7 +539,7 @@ func (db *DB) SearchAgents(query string) ([]*Agent, error) {
 		`
 	} else {
 		sqlQuery = `
-			SELECT id, name, description, capabilities, status, price, tasks_completed, rating, created_at, updated_at
+			SELECT id, user_id, name, description, version, capabilities, status, price, binary_url, binary_hash, binary_size, tasks_completed, rating, created_at, updated_at
 			FROM agents
 			WHERE LOWER(name) LIKE ?
 			   OR LOWER(description) LIKE ?
@@ -500,11 +567,16 @@ func (db *DB) SearchAgents(query string) ([]*Agent, error) {
 		agent := &Agent{}
 		err := rows.Scan(
 			&agent.ID,
+			&agent.UserID,
 			&agent.Name,
 			&agent.Description,
+			&agent.Version,
 			&agent.Capabilities,
 			&agent.Status,
 			&agent.Price,
+			&agent.BinaryURL,
+			&agent.BinaryHash,
+			&agent.BinarySize,
 			&agent.TasksCompleted,
 			&agent.Rating,
 			&agent.CreatedAt,
@@ -527,9 +599,9 @@ func (db *DB) SearchAgents(query string) ([]*Agent, error) {
 func (db *DB) UpdateAgent(agent *Agent) error {
 	var query string
 	if db.driverName == "postgres" {
-		query = `UPDATE agents SET name = $1, description = $2, capabilities = $3, status = $4, price = $5, tasks_completed = $6, rating = $7, updated_at = $8 WHERE id = $9`
+		query = `UPDATE agents SET name = $1, description = $2, version = $3, capabilities = $4, status = $5, price = $6, binary_url = $7, binary_hash = $8, binary_size = $9, tasks_completed = $10, rating = $11, updated_at = $12 WHERE id = $13`
 	} else {
-		query = `UPDATE agents SET name = ?, description = ?, capabilities = ?, status = ?, price = ?, tasks_completed = ?, rating = ?, updated_at = ? WHERE id = ?`
+		query = `UPDATE agents SET name = ?, description = ?, version = ?, capabilities = ?, status = ?, price = ?, binary_url = ?, binary_hash = ?, binary_size = ?, tasks_completed = ?, rating = ?, updated_at = ? WHERE id = ?`
 	}
 
 	agent.UpdatedAt = time.Now()
@@ -538,9 +610,13 @@ func (db *DB) UpdateAgent(agent *Agent) error {
 		query,
 		agent.Name,
 		agent.Description,
+		agent.Version,
 		agent.Capabilities,
 		agent.Status,
 		agent.Price,
+		agent.BinaryURL,
+		agent.BinaryHash,
+		agent.BinarySize,
 		agent.TasksCompleted,
 		agent.Rating,
 		agent.UpdatedAt,
