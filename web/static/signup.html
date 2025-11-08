@@ -1,331 +1,311 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html class="dark" lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sign Up - ZeroState</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Sora:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet">
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>ZeroState - Sign Up</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com" rel="preconnect"/>
+    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+    <script src="/static/js/app.js" defer></script>
+    <script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary": "#135bec",
+              "background-light": "#f6f6f8",
+              "background-dark": "#101622",
+            },
+            fontFamily: {
+              "display": ["Space Grotesk", "sans-serif"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
     <style>
-        * {
+        body {
             font-family: 'Space Grotesk', sans-serif;
         }
-        h1, h2, h3, h4, h5, h6 {
-            font-family: 'Sora', sans-serif;
-        }
-        :root {
-            --checkbox-tick-svg: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z'/%3e%3c/svg%3e");
-        }
-        .password-strength-bar {
-            height: 4px;
-            transition: all 0.3s ease;
-        }
     </style>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        primary: '#6366F1',
-                        secondary: '#8B5CF6',
-                    }
-                }
-            }
-        }
-    </script>
 </head>
-<body class="bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 min-h-screen flex items-center justify-center p-4">
-    <!-- Animated background gradient -->
-    <div class="fixed inset-0 overflow-hidden pointer-events-none">
-        <div class="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-3xl animate-pulse"></div>
-        <div class="absolute bottom-1/4 right-1/4 w-96 h-96 bg-secondary/10 rounded-full blur-3xl animate-pulse" style="animation-delay: 1s;"></div>
-    </div>
-
-    <!-- Signup Container -->
-    <div class="relative w-full max-w-md">
-        <!-- Back to Home Link -->
-        <a href="/" class="inline-flex items-center gap-2 text-gray-400 hover:text-white mb-6 transition-colors">
-            <span class="material-symbols-outlined text-xl">arrow_back</span>
-            <span>Back to Home</span>
+<body class="bg-background-light dark:bg-background-dark font-display">
+    <div class="relative flex min-h-screen w-full flex-col items-center justify-center p-4 sm:p-6 lg:p-8">
+        <a class="absolute top-6 left-6 inline-flex items-center gap-2 text-neutral-400 hover:text-white transition-colors" href="/">
+            <span class="material-symbols-outlined">arrow_back</span>
+            <span class="text-sm">Back to home</span>
         </a>
 
-        <!-- Signup Card -->
-        <div class="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-8 shadow-2xl">
-            <!-- Header -->
-            <div class="text-center mb-8">
-                <h1 class="text-3xl font-bold text-white mb-2">Create Account</h1>
-                <p class="text-gray-400">Join the decentralized AI revolution</p>
+        <div class="w-full max-w-md space-y-8">
+            <div class="text-center">
+                <a class="inline-flex items-center justify-center gap-2" href="/">
+                    <svg class="text-primary" fill="none" height="32" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z" fill="currentColor"></path>
+                        <path d="M12 12m-5 0a5 5 0 1 0 10 0a5 5 0 1 0 -10 0" fill="currentColor"></path>
+                    </svg>
+                    <span class="text-white text-2xl font-bold">ZeroState</span>
+                </a>
             </div>
 
-            <!-- Signup Form -->
-            <form id="signup-form" class="space-y-5">
-                <!-- Full Name -->
-                <div>
-                    <label for="full-name" class="block text-sm font-medium text-gray-300 mb-2">Full Name</label>
-                    <div class="relative">
-                        <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-gray-500">person</span>
-                        <input
-                            type="text"
-                            id="full-name"
-                            name="full-name"
-                            required
-                            class="w-full pl-12 pr-4 py-3 bg-white/5 border border-gray-700 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
-                            placeholder="John Doe"
-                        />
-                    </div>
-                </div>
+            <div class="flex flex-col gap-3">
+                <p class="text-white text-3xl sm:text-4xl font-black leading-tight tracking-[-0.033em] text-center">Join the Decentralized AI Future</p>
+                <p class="text-neutral-400 text-base font-normal leading-normal text-center">Create your ZeroState account to get started.</p>
+            </div>
 
-                <!-- Email -->
-                <div>
-                    <label for="email" class="block text-sm font-medium text-gray-300 mb-2">Email Address</label>
-                    <div class="relative">
-                        <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-gray-500">mail</span>
-                        <input
-                            type="email"
-                            id="email"
-                            name="email"
-                            required
-                            class="w-full pl-12 pr-4 py-3 bg-white/5 border border-gray-700 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
-                            placeholder="you@example.com"
-                        />
-                    </div>
-                </div>
+            <form id="signupForm" class="space-y-6">
+                <div class="space-y-4">
+                    <label class="flex flex-col flex-1">
+                        <p class="text-white text-base font-medium leading-normal pb-2">Full Name</p>
+                        <input id="full-name" class="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-white focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-neutral-700 bg-neutral-900/50 h-14 placeholder:text-neutral-500 p-[15px] text-base font-normal leading-normal transition-all" placeholder="Enter your full name" required/>
+                    </label>
 
-                <!-- Password -->
-                <div>
-                    <label for="password" class="block text-sm font-medium text-gray-300 mb-2">Password</label>
-                    <div class="relative">
-                        <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-gray-500">lock</span>
-                        <input
-                            type="password"
-                            id="password"
-                            name="password"
-                            required
-                            class="w-full pl-12 pr-12 py-3 bg-white/5 border border-gray-700 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
-                            placeholder="••••••••"
-                        />
-                        <button type="button" onclick="togglePassword('password')" class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors">
-                            <span class="material-symbols-outlined" id="password-toggle-icon">visibility</span>
-                        </button>
-                    </div>
-                    <!-- Password Strength Indicator -->
-                    <div class="mt-2 space-y-1">
-                        <div class="flex gap-1">
-                            <div class="password-strength-bar flex-1 rounded bg-gray-700" id="strength-bar-1"></div>
-                            <div class="password-strength-bar flex-1 rounded bg-gray-700" id="strength-bar-2"></div>
-                            <div class="password-strength-bar flex-1 rounded bg-gray-700" id="strength-bar-3"></div>
-                            <div class="password-strength-bar flex-1 rounded bg-gray-700" id="strength-bar-4"></div>
+                    <label class="flex flex-col flex-1">
+                        <p class="text-white text-base font-medium leading-normal pb-2">Email Address</p>
+                        <input id="email" class="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-white focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-neutral-700 bg-neutral-900/50 h-14 placeholder:text-neutral-500 p-[15px] text-base font-normal leading-normal transition-all" placeholder="Enter your email address" type="email" required/>
+                    </label>
+
+                    <label class="flex flex-col flex-1">
+                        <p class="text-white text-base font-medium leading-normal pb-2">Password</p>
+                        <div class="relative flex w-full flex-1 items-stretch rounded-lg">
+                            <input id="password" class="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-white focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-neutral-700 bg-neutral-900/50 h-14 placeholder:text-neutral-500 p-[15px] text-base font-normal leading-normal transition-all" placeholder="Create a strong password" type="password" required/>
+                            <button aria-label="Toggle password visibility" class="text-neutral-400 absolute right-0 inset-y-0 flex items-center justify-center pr-4" type="button" id="togglePassword">
+                                <span class="material-symbols-outlined" data-icon="Eye">visibility_off</span>
+                            </button>
                         </div>
-                        <p class="text-xs text-gray-500" id="strength-text">Enter a password</p>
+                    </label>
+
+                    <div class="flex flex-col gap-2">
+                        <div class="grid grid-cols-4 gap-2 h-1 rounded-full overflow-hidden bg-neutral-800" id="passwordStrengthBar">
+                            <div class="bg-neutral-800" id="strength1"></div>
+                            <div class="bg-neutral-800" id="strength2"></div>
+                            <div class="bg-neutral-800" id="strength3"></div>
+                            <div class="bg-neutral-800" id="strength4"></div>
+                        </div>
+                        <p class="text-neutral-400 text-xs font-medium leading-normal" id="passwordStrengthText">Enter a password</p>
+                    </div>
+
+                    <label class="flex flex-col flex-1">
+                        <p class="text-white text-base font-medium leading-normal pb-2">Confirm Password</p>
+                        <input id="confirm-password" class="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-white focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-neutral-700 bg-neutral-900/50 h-14 placeholder:text-neutral-500 p-[15px] text-base font-normal leading-normal transition-all" placeholder="Confirm your password" type="password" required/>
+                    </label>
+
+                    <!-- Error Message -->
+                    <div id="signupError" class="hidden bg-red-900/20 border border-red-600/50 text-red-200 px-4 py-3 rounded-lg">
+                        <p class="text-sm"></p>
                     </div>
                 </div>
 
-                <!-- Confirm Password -->
-                <div>
-                    <label for="confirm-password" class="block text-sm font-medium text-gray-300 mb-2">Confirm Password</label>
-                    <div class="relative">
-                        <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-gray-500">lock</span>
-                        <input
-                            type="password"
-                            id="confirm-password"
-                            name="confirm-password"
-                            required
-                            class="w-full pl-12 pr-12 py-3 bg-white/5 border border-gray-700 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
-                            placeholder="••••••••"
-                        />
-                        <button type="button" onclick="togglePassword('confirm-password')" class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors">
-                            <span class="material-symbols-outlined" id="confirm-password-toggle-icon">visibility</span>
-                        </button>
-                    </div>
-                    <p class="text-xs text-red-400 mt-1 hidden" id="password-match-error">Passwords do not match</p>
-                </div>
-
-                <!-- Terms & Conditions -->
-                <div class="flex items-start gap-3">
-                    <input
-                        type="checkbox"
-                        id="terms"
-                        name="terms"
-                        required
-                        class="h-5 w-5 rounded border-gray-400 dark:border-gray-600 border-2 bg-transparent text-primary checked:bg-primary checked:border-primary checked:bg-[image:--checkbox-tick-svg] mt-0.5 cursor-pointer"
-                    />
-                    <label for="terms" class="text-sm text-gray-400 cursor-pointer">
-                        I agree to the <a href="/terms" class="text-primary hover:text-primary/80 transition-colors">Terms of Service</a> and <a href="/privacy" class="text-primary hover:text-primary/80 transition-colors">Privacy Policy</a>
+                <div class="flex items-center">
+                    <input class="h-4 w-4 rounded border-neutral-600 bg-neutral-800 text-primary focus:ring-primary" id="terms" name="terms" type="checkbox" required/>
+                    <label class="ml-3 block text-sm text-neutral-400" for="terms">
+                        I agree to the <a class="font-medium text-primary hover:underline" href="#">Terms &amp; Conditions</a>
                     </label>
                 </div>
 
-                <!-- Submit Button -->
-                <button
-                    type="submit"
-                    class="w-full bg-gradient-to-r from-primary to-secondary text-white font-semibold py-3 rounded-xl hover:opacity-90 transition-opacity shadow-lg shadow-primary/25"
-                >
-                    Create Account
+                <button class="flex w-full items-center justify-center rounded-lg bg-primary px-6 py-3.5 text-base font-bold text-white shadow-sm hover:bg-primary/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary transition-colors" type="submit">
+                    <span id="signupButtonText">Create Account</span>
+                    <svg id="signupSpinner" class="hidden animate-spin ml-2 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
                 </button>
             </form>
 
-            <!-- Divider -->
-            <div class="flex items-center gap-4 my-6">
-                <div class="flex-1 h-px bg-gray-700"></div>
-                <span class="text-gray-500 text-sm">or continue with</span>
-                <div class="flex-1 h-px bg-gray-700"></div>
+            <div class="relative">
+                <div aria-hidden="true" class="absolute inset-0 flex items-center">
+                    <div class="w-full border-t border-neutral-700"></div>
+                </div>
+                <div class="relative flex justify-center text-sm">
+                    <span class="bg-background-dark px-2 text-neutral-400">OR</span>
+                </div>
             </div>
 
-            <!-- Social Signup -->
-            <div class="grid grid-cols-2 gap-3">
-                <button class="flex items-center justify-center gap-2 py-3 px-4 bg-white/5 border border-gray-700 rounded-xl hover:bg-white/10 transition-colors group">
-                    <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-                        <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-                        <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-                        <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <button class="flex w-full items-center justify-center gap-3 rounded-lg border border-neutral-700 bg-neutral-900/50 px-3 py-3 text-white shadow-sm hover:bg-neutral-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary transition-colors">
+                    <svg aria-hidden="true" class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"></path>
+                        <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"></path>
+                        <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"></path>
+                        <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"></path>
                     </svg>
-                    <span class="text-gray-300 text-sm font-medium">Google</span>
+                    <span class="text-sm font-semibold leading-6">Continue with Google</span>
                 </button>
-                <button class="flex items-center justify-center gap-2 py-3 px-4 bg-white/5 border border-gray-700 rounded-xl hover:bg-white/10 transition-colors group">
-                    <svg class="w-5 h-5 fill-gray-300" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+                <button class="flex w-full items-center justify-center gap-3 rounded-lg border border-neutral-700 bg-neutral-900/50 px-3 py-3 text-white shadow-sm hover:bg-neutral-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary transition-colors">
+                    <svg aria-hidden="true" class="h-5 w-5" fill="currentColor" viewBox="0 0 16 16">
+                        <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"></path>
                     </svg>
-                    <span class="text-gray-300 text-sm font-medium">GitHub</span>
+                    <span class="text-sm font-semibold leading-6">Continue with GitHub</span>
                 </button>
             </div>
 
-            <!-- Sign In Link -->
-            <p class="text-center text-gray-400 text-sm mt-6">
-                Already have an account?
-                <a href="/login.html" class="text-primary hover:text-primary/80 transition-colors font-semibold">Sign In</a>
+            <p class="text-center text-sm text-neutral-400">
+                Already have an account? <a class="font-semibold leading-6 text-primary hover:underline" href="/login.html">Sign in</a>
             </p>
         </div>
 
-        <!-- Footer Links -->
-        <div class="flex justify-center gap-6 mt-6 text-sm text-gray-500">
-            <a href="/terms" class="hover:text-gray-300 transition-colors">Terms</a>
-            <a href="/privacy" class="hover:text-gray-300 transition-colors">Privacy</a>
-            <a href="/help" class="hover:text-gray-300 transition-colors">Help</a>
-        </div>
+        <footer class="absolute bottom-6 text-center text-sm text-neutral-500">
+            <div class="flex items-center gap-x-4">
+                <a class="hover:text-primary transition-colors" href="#">Terms of Service</a>
+                <span class="text-neutral-600">|</span>
+                <a class="hover:text-primary transition-colors" href="#">Privacy Policy</a>
+                <span class="text-neutral-600">|</span>
+                <a class="hover:text-primary transition-colors" href="#">Help</a>
+            </div>
+        </footer>
     </div>
 
     <script>
-        // Toggle password visibility
-        function togglePassword(inputId) {
-            const input = document.getElementById(inputId);
-            const icon = document.getElementById(inputId + '-toggle-icon');
-
-            if (input.type === 'password') {
-                input.type = 'text';
-                icon.textContent = 'visibility_off';
-            } else {
-                input.type = 'password';
-                icon.textContent = 'visibility';
-            }
-        }
-
         // Password strength checker
-        const passwordInput = document.getElementById('password');
-        const strengthBars = [
-            document.getElementById('strength-bar-1'),
-            document.getElementById('strength-bar-2'),
-            document.getElementById('strength-bar-3'),
-            document.getElementById('strength-bar-4')
-        ];
-        const strengthText = document.getElementById('strength-text');
-
-        passwordInput.addEventListener('input', function() {
-            const password = this.value;
+        function checkPasswordStrength(password) {
             let strength = 0;
-
             if (password.length >= 8) strength++;
             if (password.match(/[a-z]/) && password.match(/[A-Z]/)) strength++;
             if (password.match(/[0-9]/)) strength++;
             if (password.match(/[^a-zA-Z0-9]/)) strength++;
+            return strength;
+        }
+
+        function updatePasswordStrength(password) {
+            const strength = checkPasswordStrength(password);
+            const strengthBars = [
+                document.getElementById('strength1'),
+                document.getElementById('strength2'),
+                document.getElementById('strength3'),
+                document.getElementById('strength4')
+            ];
+            const strengthText = document.getElementById('passwordStrengthText');
 
             // Reset all bars
             strengthBars.forEach(bar => {
-                bar.classList.remove('bg-red-500', 'bg-orange-500', 'bg-yellow-500', 'bg-green-500');
-                bar.classList.add('bg-gray-700');
+                bar.className = 'bg-neutral-800';
             });
 
-            // Update bars based on strength
-            const colors = ['bg-red-500', 'bg-orange-500', 'bg-yellow-500', 'bg-green-500'];
-            const texts = ['Weak password', 'Fair password', 'Good password', 'Strong password'];
-
-            for (let i = 0; i < strength; i++) {
-                strengthBars[i].classList.remove('bg-gray-700');
-                strengthBars[i].classList.add(colors[strength - 1]);
-            }
-
-            strengthText.textContent = password.length > 0 ? texts[strength - 1] || 'Very weak password' : 'Enter a password';
-            strengthText.className = `text-xs ${strength >= 3 ? 'text-green-400' : strength >= 2 ? 'text-yellow-400' : 'text-red-400'}`;
-        });
-
-        // Password match validation
-        const confirmPasswordInput = document.getElementById('confirm-password');
-        const passwordMatchError = document.getElementById('password-match-error');
-
-        confirmPasswordInput.addEventListener('input', function() {
-            if (this.value !== passwordInput.value && this.value.length > 0) {
-                passwordMatchError.classList.remove('hidden');
-                this.classList.add('border-red-500');
-            } else {
-                passwordMatchError.classList.add('hidden');
-                this.classList.remove('border-red-500');
-            }
-        });
-
-        // Form submission
-        document.getElementById('signup-form').addEventListener('submit', function(e) {
-            e.preventDefault();
-
-            const password = passwordInput.value;
-            const confirmPassword = confirmPasswordInput.value;
-
-            if (password !== confirmPassword) {
-                passwordMatchError.classList.remove('hidden');
-                confirmPasswordInput.classList.add('border-red-500');
+            if (password.length === 0) {
+                strengthText.textContent = 'Enter a password';
+                strengthText.className = 'text-neutral-400 text-xs font-medium leading-normal';
                 return;
             }
 
-            // Submit to backend API
-            const formData = {
-                full_name: document.getElementById('full-name').value,
-                email: document.getElementById('email').value,
-                password: password
-            };
+            // Update bars based on strength
+            const colors = ['bg-red-500', 'bg-yellow-500', 'bg-blue-500', 'bg-green-500'];
+            const texts = ['Weak', 'Fair', 'Good', 'Strong'];
+            const textColors = ['text-red-500', 'text-yellow-500', 'text-blue-500', 'text-green-500'];
 
-            console.log('Submitting to API:', formData);
-
-            // Determine API URL based on environment
-            const API_BASE_URL = window.location.hostname.includes('vercel.app')
-                ? 'https://zerostate-api.fly.dev/api/v1'
-                : window.location.origin + '/api/v1';
-
-            try {
-                const response = await fetch(`${API_BASE_URL}/users/register`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(formData)
-                });
-
-                const data = await response.json();
-
-                if (response.ok) {
-                    // Save token and user data
-                    localStorage.setItem('zerostate_auth_token', data.token);
-                    localStorage.setItem('zerostate_user_data', JSON.stringify(data.user));
-
-                    // Redirect to dashboard
-                    window.location.href = '/dashboard.html';
-                } else {
-                    // Show error message
-                    alert(data.error || 'Registration failed. Please try again.');
-                }
-            } catch (error) {
-                console.error('Registration error:', error);
-                alert('Network error. Please check your connection and try again.');
+            for (let i = 0; i < strength; i++) {
+                strengthBars[i].className = colors[strength - 1];
             }
+
+            strengthText.textContent = texts[strength - 1];
+            strengthText.className = `${textColors[strength - 1]} text-xs font-medium leading-normal`;
+        }
+
+        // Password visibility toggle
+        document.getElementById('togglePassword')?.addEventListener('click', function() {
+            const passwordInput = document.getElementById('password');
+            const icon = this.querySelector('.material-symbols-outlined');
+
+            if (passwordInput.type === 'password') {
+                passwordInput.type = 'text';
+                icon.textContent = 'visibility';
+            } else {
+                passwordInput.type = 'password';
+                icon.textContent = 'visibility_off';
+            }
+        });
+
+        // Password strength monitoring
+        document.getElementById('password')?.addEventListener('input', function() {
+            updatePasswordStrength(this.value);
+        });
+
+        // Form submission
+        document.addEventListener('DOMContentLoaded', () => {
+            const signupForm = document.getElementById('signupForm');
+            const signupError = document.getElementById('signupError');
+            const signupButtonText = document.getElementById('signupButtonText');
+            const signupSpinner = document.getElementById('signupSpinner');
+
+            signupForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+
+                const fullName = document.getElementById('full-name').value;
+                const email = document.getElementById('email').value;
+                const password = document.getElementById('password').value;
+                const confirmPassword = document.getElementById('confirm-password').value;
+                const termsAccepted = document.getElementById('terms').checked;
+
+                // Validation
+                if (password !== confirmPassword) {
+                    signupError.querySelector('p').textContent = 'Passwords do not match';
+                    signupError.classList.remove('hidden');
+                    return;
+                }
+
+                if (!termsAccepted) {
+                    signupError.querySelector('p').textContent = 'Please accept the Terms & Conditions';
+                    signupError.classList.remove('hidden');
+                    return;
+                }
+
+                const passwordStrength = checkPasswordStrength(password);
+                if (passwordStrength < 2) {
+                    signupError.querySelector('p').textContent = 'Please use a stronger password';
+                    signupError.classList.remove('hidden');
+                    return;
+                }
+
+                // Show loading state
+                signupButtonText.textContent = 'Creating Account...';
+                signupSpinner.classList.remove('hidden');
+                signupError.classList.add('hidden');
+
+                const formData = {
+                    full_name: fullName,
+                    email: email,
+                    password: password
+                };
+
+                const API_BASE_URL = window.location.hostname.includes('vercel.app')
+                    ? 'https://zerostate-api.fly.dev/api/v1'
+                    : window.location.origin + '/api/v1';
+
+                try {
+                    const response = await fetch(`${API_BASE_URL}/users/register`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(formData)
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        // Store token and user data
+                        localStorage.setItem('zerostate_auth_token', data.token);
+                        localStorage.setItem('zerostate_user_data', JSON.stringify(data.user));
+
+                        // Redirect to dashboard
+                        window.location.href = '/dashboard.html';
+                    } else {
+                        signupError.querySelector('p').textContent = data.error || 'Registration failed. Please try again.';
+                        signupError.classList.remove('hidden');
+                    }
+                } catch (error) {
+                    console.error('Registration error:', error);
+                    signupError.querySelector('p').textContent = 'Network error. Please check your connection and try again.';
+                    signupError.classList.remove('hidden');
+                } finally {
+                    // Reset button state
+                    signupButtonText.textContent = 'Create Account';
+                    signupSpinner.classList.add('hidden');
+                }
+            });
         });
     </script>
 </body>
