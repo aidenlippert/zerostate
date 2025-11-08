@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - ZeroState</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/static/js/app.js" defer></script>
+</head>
+<body class="bg-gray-900 min-h-screen">
+    <div id="app">
+        <!-- Navigation -->
+        <nav class="bg-gray-800 border-b border-gray-700">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex items-center justify-between h-16">
+                    <div class="flex items-center">
+                        <div class="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-600">
+                            ZeroState
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <span id="userEmail" class="text-gray-300 text-sm"></span>
+                        <button id="logoutBtn" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium">
+                            Logout
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <!-- Welcome Section -->
+            <div class="mb-8">
+                <h1 class="text-3xl font-bold text-white">Dashboard</h1>
+                <p class="mt-2 text-gray-400">Welcome back, <span id="userName" class="text-purple-400"></span>!</p>
+            </div>
+
+            <!-- Quick Stats -->
+            <div class="grid grid-cols-1 gap-6 sm:grid-cols-3 mb-8">
+                <div class="bg-gray-800 rounded-lg p-6 border border-gray-700">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-gray-400">Active Agents</p>
+                            <p id="activeAgents" class="mt-2 text-3xl font-semibold text-white">0</p>
+                        </div>
+                        <div class="text-4xl">🤖</div>
+                    </div>
+                </div>
+
+                <div class="bg-gray-800 rounded-lg p-6 border border-gray-700">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-gray-400">Tasks Completed</p>
+                            <p id="tasksCompleted" class="mt-2 text-3xl font-semibold text-white">0</p>
+                        </div>
+                        <div class="text-4xl">✅</div>
+                    </div>
+                </div>
+
+                <div class="bg-gray-800 rounded-lg p-6 border border-gray-700">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-gray-400">Total Earnings</p>
+                            <p id="totalEarnings" class="mt-2 text-3xl font-semibold text-white">$0</p>
+                        </div>
+                        <div class="text-4xl">💰</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="bg-gray-800 rounded-lg p-6 border border-gray-700 mb-8">
+                <h2 class="text-xl font-semibold text-white mb-4">Quick Actions</h2>
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    <a href="/agents.html" class="flex items-center p-4 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors">
+                        <span class="text-2xl mr-3">🤖</span>
+                        <span class="text-white font-medium">Browse Agents</span>
+                    </a>
+                    <button class="flex items-center p-4 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors">
+                        <span class="text-2xl mr-3">📝</span>
+                        <span class="text-white font-medium">Submit Task</span>
+                    </button>
+                    <button class="flex items-center p-4 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors">
+                        <span class="text-2xl mr-3">📊</span>
+                        <span class="text-white font-medium">View Analytics</span>
+                    </button>
+                    <button class="flex items-center p-4 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors">
+                        <span class="text-2xl mr-3">⚙️</span>
+                        <span class="text-white font-medium">Settings</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Recent Activity -->
+            <div class="bg-gray-800 rounded-lg p-6 border border-gray-700">
+                <h2 class="text-xl font-semibold text-white mb-4">Recent Activity</h2>
+                <div id="recentActivity" class="space-y-4">
+                    <p class="text-gray-400 text-center py-8">No recent activity</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', async () => {
+            const auth = new AuthManager();
+
+            // Check authentication
+            if (!auth.isAuthenticated()) {
+                window.location.href = '/';
+                return;
+            }
+
+            // Display user info
+            const userData = auth.getUserData();
+            if (userData) {
+                document.getElementById('userName').textContent = userData.full_name;
+                document.getElementById('userEmail').textContent = userData.email;
+            }
+
+            // Logout handler
+            document.getElementById('logoutBtn').addEventListener('click', () => {
+                auth.logout();
+                window.location.href = '/';
+            });
+
+            // Load dashboard data
+            try {
+                const apiClient = new APIClient(auth);
+
+                // TODO: Load actual data from API
+                // For now, showing placeholder data
+
+            } catch (error) {
+                console.error('Failed to load dashboard data:', error);
+            }
+        });
+    </script>
+</body>
+</html>

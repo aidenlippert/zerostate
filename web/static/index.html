@@ -1,96 +1,176 @@
 <!DOCTYPE html>
-<html class="dark" lang="en">
+<html lang="en">
 <head>
-    <meta charset="utf-8"/>
-    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-    <title>ZeroState AI Platform</title>
-    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&display=swap" rel="stylesheet"/>
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
-    <style>
-        .gradient-text {
-            background-image: linear-gradient(to right, #00FFFF, #FF00FF);
-            -webkit-background-clip: text;
-            background-clip: text;
-            color: transparent;
-        }
-        .material-symbols-outlined {
-            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
-        }
-    </style>
-    <script id="tailwind-config">
-        tailwind.config = {
-            darkMode: "class",
-            theme: {
-                extend: {
-                    colors: {
-                        "primary": "#6b5bfb",
-                        "background-light": "#f6f5f8",
-                        "background-dark": "#0A0E1A",
-                    },
-                    fontFamily: {
-                        "display": ["Space Grotesk", "sans-serif"]
-                    },
-                    borderRadius: {
-                        "DEFAULT": "0.5rem",
-                        "lg": "1rem",
-                        "xl": "1.5rem",
-                        "full": "9999px"
-                    },
-                },
-            },
-        }
-    </script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZeroState - AI Agent Marketplace</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/static/js/app.js" defer></script>
 </head>
-<body class="font-display bg-background-light dark:bg-background-dark text-[#E0E0E0]">
-    <div class="relative min-h-screen w-full flex-col">
-        <!-- Sticky Top Navbar -->
-        <header class="sticky top-0 z-50 w-full border-b border-white/10 bg-black/30 backdrop-blur-lg">
-            <div class="container mx-auto flex h-20 items-center justify-between px-6">
-                <div class="flex items-center gap-4">
-                    <div class="size-6 text-primary">
-                        <svg fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M39.5563 34.1455V13.8546C39.5563 15.708 36.8773 17.3437 32.7927 18.3189C30.2914 18.916 27.263 19.2655 24 19.2655C20.737 19.2655 17.7086 18.916 15.2073 18.3189C11.1227 17.3437 8.44365 15.708 8.44365 13.8546V34.1455C8.44365 35.9988 11.1227 37.6346 15.2073 38.6098C17.7086 39.2069 20.737 39.5564 24 39.5564C27.263 39.5564 30.2914 39.2069 32.7927 38.6098C36.8773 37.6346 39.5563 35.9988 39.5563 34.1455Z" fill="currentColor"></path>
-                            <path clip-rule="evenodd" d="M10.4485 13.8519C10.4749 13.9271 10.6203 14.246 11.379 14.7361C12.298 15.3298 13.7492 15.9145 15.6717 16.3735C18.0007 16.9296 20.8712 17.2655 24 17.2655C27.1288 17.2655 29.9993 16.9296 32.3283 16.3735C34.2508 15.9145 35.702 15.3298 36.621 14.7361C37.3796 14.246 37.5251 13.9271 37.5515 13.8519C37.5287 13.7876 37.4333 13.5973 37.0635 13.2931C36.5266 12.8516 35.6288 12.3647 34.343 11.9175C31.79 11.0295 28.1333 10.4437 24 10.4437C19.8667 10.4437 16.2099 11.0295 13.657 11.9175C12.3712 12.3647 11.4734 12.8516 10.9365 13.2931C10.5667 13.5973 10.4713 13.7876 10.4485 13.8519ZM37.5563 18.7877C36.3176 19.3925 34.8502 19.8839 33.2571 20.2642C30.5836 20.9025 27.3973 21.2655 24 21.2655C20.6027 21.2655 17.4164 20.9025 14.7429 20.2642C13.1498 19.8839 11.6824 19.3925 10.4436 18.7877V34.1275C10.4515 34.1545 10.5427 34.4867 11.379 35.027C12.298 35.6207 13.7492 36.2054 15.6717 36.6644C18.0007 37.2205 20.8712 37.5564 24 37.5564C27.1288 37.5564 29.9993 37.2205 32.3283 36.6644C34.2508 36.2054 35.702 35.6207 36.621 35.027C37.4573 34.4867 37.5485 34.1546 37.5563 34.1275V18.7877ZM41.5563 13.8546V34.1455C41.5563 36.1078 40.158 37.5042 38.7915 38.3869C37.3498 39.3182 35.4192 40.0389 33.2571 40.5551C30.5836 41.1934 27.3973 41.5564 24 41.5564C20.6027 41.5564 17.4164 41.1934 14.7429 40.5551C12.5808 40.0389 10.6502 39.3182 9.20848 38.3869C7.84205 37.5042 6.44365 36.1078 6.44365 34.1455L6.44365 13.8546C6.44365 12.2684 7.37223 11.0454 8.39581 10.2036C9.43325 9.3505 10.8137 8.67141 12.343 8.13948C15.4203 7.06909 19.5418 6.44366 24 6.44366C28.4582 6.44366 32.5797 7.06909 35.657 8.13948C37.1863 8.67141 38.5667 9.3505 39.6042 10.2036C40.6278 11.0454 41.5563 12.2684 41.5563 13.8546Z" fill="currentColor" fill-rule="evenodd"></path>
-                        </svg>
+<body class="bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 min-h-screen">
+    <div id="app">
+        <!-- Navigation -->
+        <nav class="bg-gray-800 bg-opacity-50 backdrop-blur-lg border-b border-gray-700">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex items-center justify-between h-16">
+                    <div class="flex items-center">
+                        <div class="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-600">
+                            ZeroState
+                        </div>
                     </div>
-                    <h2 class="text-xl font-bold text-white">ZeroState Platform</h2>
-                </div>
-                <nav class="hidden items-center gap-10 md:flex">
-                    <a class="group relative text-sm font-medium text-white" href="/" id="nav-dashboard">
-                        <span class="gradient-text">Dashboard</span>
-                        <span class="absolute -bottom-2 left-0 h-0.5 w-full scale-x-0 bg-gradient-to-r from-cyan-400 to-fuchsia-500 transition-transform duration-300 group-hover:scale-x-100" style="box-shadow: 0 0 8px 0px #00FFFF, 0 0 12px 0px #FF00FF;"></span>
-                    </a>
-                    <a class="group relative text-sm font-medium text-white" href="/tasks" id="nav-tasks">
-                        <span class="gradient-text">Tasks</span>
-                        <span class="absolute -bottom-2 left-0 h-0.5 w-full scale-x-0 bg-gradient-to-r from-cyan-400 to-fuchsia-500 transition-transform duration-300 group-hover:scale-x-100" style="box-shadow: 0 0 8px 0px #00FFFF, 0 0 12px 0px #FF00FF;"></span>
-                    </a>
-                    <a class="group relative text-sm font-medium text-white" href="/agents" id="nav-agents">
-                        <span class="gradient-text">Agents</span>
-                        <span class="absolute -bottom-2 left-0 h-0.5 w-full scale-x-0 bg-gradient-to-r from-cyan-400 to-fuchsia-500 transition-transform duration-300 group-hover:scale-x-100" style="box-shadow: 0 0 8px 0px #00FFFF, 0 0 12px 0px #FF00FF;"></span>
-                    </a>
-                    <a class="group relative text-sm font-medium text-white" href="/dashboard" id="nav-metrics">
-                        <span class="gradient-text">Metrics</span>
-                        <span class="absolute -bottom-2 left-0 h-0.5 w-full scale-x-0 bg-gradient-to-r from-cyan-400 to-fuchsia-500 transition-transform duration-300 group-hover:scale-x-100" style="box-shadow: 0 0 8px 0px #00FFFF, 0 0 12px 0px #FF00FF;"></span>
-                    </a>
-                </nav>
-                <div class="flex items-center gap-4">
-                    <div class="hidden items-center justify-center rounded-lg bg-white/5 px-4 py-2 text-sm text-gray-300 sm:flex">
-                        <span class="truncate">User: demo@user.com</span>
+                    <div class="flex items-center space-x-4">
+                        <a href="/signup.html" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium">
+                            Sign Up
+                        </a>
+                        <a href="/" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+                            Login
+                        </a>
                     </div>
-                    <button class="flex h-10 w-10 items-center justify-center rounded-lg bg-white/5 md:hidden">
-                        <span class="material-symbols-outlined text-gray-300">menu</span>
-                    </button>
                 </div>
             </div>
-        </header>
+        </nav>
 
-        <!-- Main Content Area -->
-        <main class="container mx-auto flex-1 px-6 py-12" id="app-content">
-            <!-- Content will be dynamically loaded here -->
-        </main>
+        <!-- Hero Section -->
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
+            <div class="text-center">
+                <h1 class="text-5xl font-extrabold text-white sm:text-6xl md:text-7xl">
+                    AI Agent
+                    <span class="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-600">
+                        Marketplace
+                    </span>
+                </h1>
+                <p class="mt-6 max-w-2xl mx-auto text-xl text-gray-300">
+                    Discover, deploy, and monetize AI agents in a decentralized marketplace powered by blockchain technology.
+                </p>
+            </div>
+
+            <!-- Login Form -->
+            <div class="mt-16 max-w-md mx-auto">
+                <div class="bg-gray-800 bg-opacity-50 backdrop-blur-lg rounded-lg shadow-xl p-8 border border-gray-700">
+                    <h2 class="text-2xl font-bold text-white mb-6">Login to Your Account</h2>
+
+                    <form id="loginForm" class="space-y-6">
+                        <!-- Email -->
+                        <div>
+                            <label for="email" class="block text-sm font-medium text-gray-300">
+                                Email Address
+                            </label>
+                            <input
+                                type="email"
+                                id="email"
+                                name="email"
+                                required
+                                class="mt-1 block w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                placeholder="you@example.com"
+                            />
+                        </div>
+
+                        <!-- Password -->
+                        <div>
+                            <label for="password" class="block text-sm font-medium text-gray-300">
+                                Password
+                            </label>
+                            <input
+                                type="password"
+                                id="password"
+                                name="password"
+                                required
+                                class="mt-1 block w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                placeholder="••••••••"
+                            />
+                        </div>
+
+                        <!-- Error Message -->
+                        <div id="loginError" class="hidden bg-red-900 bg-opacity-50 border border-red-600 text-red-200 px-4 py-3 rounded-md">
+                            <p class="text-sm"></p>
+                        </div>
+
+                        <!-- Submit Button -->
+                        <button
+                            type="submit"
+                            class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-colors"
+                        >
+                            <span id="loginButtonText">Sign In</span>
+                            <svg id="loginSpinner" class="hidden animate-spin ml-2 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                        </button>
+                    </form>
+
+                    <div class="mt-6 text-center">
+                        <p class="text-sm text-gray-400">
+                            Don't have an account?
+                            <a href="/signup.html" class="font-medium text-purple-400 hover:text-purple-300">
+                                Sign up
+                            </a>
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Features -->
+            <div class="mt-20 grid grid-cols-1 gap-8 sm:grid-cols-3">
+                <div class="bg-gray-800 bg-opacity-50 backdrop-blur-lg rounded-lg p-6 border border-gray-700">
+                    <div class="text-purple-400 text-3xl mb-4">🤖</div>
+                    <h3 class="text-lg font-semibold text-white mb-2">AI Agents</h3>
+                    <p class="text-gray-400">Deploy specialized AI agents for various tasks</p>
+                </div>
+                <div class="bg-gray-800 bg-opacity-50 backdrop-blur-lg rounded-lg p-6 border border-gray-700">
+                    <div class="text-purple-400 text-3xl mb-4">⚡</div>
+                    <h3 class="text-lg font-semibold text-white mb-2">Fast Execution</h3>
+                    <p class="text-gray-400">Lightning-fast task execution with optimal routing</p>
+                </div>
+                <div class="bg-gray-800 bg-opacity-50 backdrop-blur-lg rounded-lg p-6 border border-gray-700">
+                    <div class="text-purple-400 text-3xl mb-4">🔒</div>
+                    <h3 class="text-lg font-semibold text-white mb-2">Secure & Decentralized</h3>
+                    <p class="text-gray-400">Blockchain-powered security and transparency</p>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <script src="/static/js/app.js"></script>
+    <script>
+        // Initialize login form handler
+        document.addEventListener('DOMContentLoaded', () => {
+            const loginForm = document.getElementById('loginForm');
+            const loginError = document.getElementById('loginError');
+            const loginButtonText = document.getElementById('loginButtonText');
+            const loginSpinner = document.getElementById('loginSpinner');
+
+            // Check if already logged in
+            const auth = new AuthManager();
+            if (auth.isAuthenticated()) {
+                window.location.href = '/dashboard.html';
+                return;
+            }
+
+            loginForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+
+                const email = document.getElementById('email').value;
+                const password = document.getElementById('password').value;
+
+                // Show loading state
+                loginButtonText.textContent = 'Signing In...';
+                loginSpinner.classList.remove('hidden');
+                loginError.classList.add('hidden');
+
+                try {
+                    await auth.login(email, password);
+                    // Redirect to dashboard
+                    window.location.href = '/dashboard.html';
+                } catch (error) {
+                    // Show error
+                    loginError.querySelector('p').textContent = error.message;
+                    loginError.classList.remove('hidden');
+
+                    // Reset button state
+                    loginButtonText.textContent = 'Sign In';
+                    loginSpinner.classList.add('hidden');
+                }
+            });
+        });
+    </script>
 </body>
 </html>
