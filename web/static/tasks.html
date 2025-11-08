@@ -347,5 +347,16 @@
             }
         });
     </script>
+
+    <!-- WebSocket Connection Status Indicator -->
+    <div id="ws-status" class="fixed bottom-4 right-4 z-50 opacity-0 transition-opacity duration-300">
+        <div class="flex items-center gap-2 px-4 py-2 rounded-lg bg-surface-dark border border-gray-800 backdrop-blur-sm shadow-lg">
+            <span class="inline-block w-2 h-2 rounded-full bg-yellow-500 animate-pulse" id="ws-status-indicator"></span>
+            <span class="text-sm text-gray-300" id="ws-status-text">Connecting...</span>
+        </div>
+    </div>
+
+    <!-- Load WebSocket Client -->
+    <script src="/static/js/websocket.js"></script>
 </body>
 </html>

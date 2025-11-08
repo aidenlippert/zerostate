@@ -26,6 +26,8 @@ COPY libs/routing/go.mod ./libs/routing/
 COPY libs/search/go.mod ./libs/search/
 COPY libs/telemetry/go.mod ./libs/telemetry/
 COPY libs/economic/go.mod ./libs/economic/
+COPY libs/storage/go.mod ./libs/storage/
+COPY libs/websocket/go.mod ./libs/websocket/
 COPY cmd/api/go.mod ./cmd/api/
 
 # Copy all go.sum files (only where they exist)
@@ -41,6 +43,8 @@ COPY libs/reputation/go.sum ./libs/reputation/
 COPY libs/routing/go.sum ./libs/routing/
 COPY libs/search/go.sum ./libs/search/
 COPY libs/telemetry/go.sum ./libs/telemetry/
+COPY libs/storage/go.sum ./libs/storage/
+COPY libs/websocket/go.sum ./libs/websocket/
 COPY cmd/api/go.sum ./cmd/api/
 
 # Download dependencies

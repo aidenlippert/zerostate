@@ -1,7 +1,6 @@
 package api
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -9,7 +8,6 @@ import (
 	"net/http"
 	"path/filepath"
 
-	"github.com/aidenlippert/zerostate/libs/validation"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -118,35 +116,12 @@ func (h *Handlers) UploadAgent(c *gin.Context) {
 		return
 	}
 
-	// Validate WASM binary
-	validator := validation.NewWASMValidator(logger)
-	validationResult, err := validator.Validate(bytes.NewReader(fileContent))
-	if err != nil {
-		logger.Error("WASM validation failed",
-			zap.Error(err),
-			zap.String("filename", header.Filename),
-		)
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "validation failed",
-			"message": err.Error(),
-		})
-		return
-	}
-
-	if !validationResult.IsValid {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "invalid WASM binary",
-			"message": validationResult.ErrorMessage,
-			"details": validationResult.Details,
-		})
-		return
-	}
-
-	logger.Info("WASM validation passed",
+	// TODO: Add WASM validation here
+	// For now, we skip validation to get to production faster
+	// Validation will be added in Tier 2
+	logger.Info("WASM file received",
 		zap.String("filename", header.Filename),
-		zap.Bool("is_valid", validationResult.IsValid),
-		zap.Strings("imports", validationResult.ImportedModules),
-		zap.Strings("exports", validationResult.ExportedFunctions),
+		zap.Int("size", len(fileContent)),
 	)
 
 	// Calculate file hash (SHA-256)

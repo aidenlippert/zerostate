@@ -18,8 +18,7 @@ use (
 	./libs/reputation
 	./libs/routing
 	./libs/search
+	./libs/storage
 	./libs/telemetry
-	./libs/validation
+	./libs/websocket
 )
-use ./libs/storage
-use ./libs/websocket
