@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>ZeroState - API Keys</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com" rel="preconnect"/>
+    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+    <script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#135bec",
+                        "background-light": "#f6f6f8",
+                        "background-dark": "#101622",
+                    },
+                    fontFamily: {
+                        "display": ["Space Grotesk", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+    <style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            font-size: 24px;
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark font-display text-gray-800 dark:text-gray-200">
+    <div class="relative flex min-h-screen w-full">
+        <!-- SideNavBar -->
+        <aside class="flex h-screen flex-col justify-between border-r border-gray-200 dark:border-gray-800 bg-background-light dark:bg-background-dark p-4 sticky top-0 w-64">
+            <div class="flex flex-col gap-4">
+                <div class="flex gap-3 items-center">
+                    <div class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" id="userAvatar" style='background-image: url("https://cdn.usegalileo.ai/stability/d1abe0c9-28ec-422c-9301-b6d5d0b87c23.png");'></div>
+                    <div class="flex flex-col">
+                        <h1 class="text-gray-900 dark:text-white text-base font-medium leading-normal" id="userName">Developer</h1>
+                        <p class="text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal" id="userEmail">developer@zerostate.ai</p>
+                    </div>
+                </div>
+                <nav class="flex flex-col gap-2 mt-4">
+                    <a class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800/50" href="/dashboard.html">
+                        <span class="material-symbols-outlined text-gray-600 dark:text-gray-400">dashboard</span>
+                        <p class="text-gray-700 dark:text-gray-300 text-sm font-medium leading-normal">Dashboard</p>
+                    </a>
+                    <a class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800/50" href="/agents.html">
+                        <span class="material-symbols-outlined text-gray-600 dark:text-gray-400">psychology</span>
+                        <p class="text-gray-700 dark:text-gray-300 text-sm font-medium leading-normal">Agents</p>
+                    </a>
+                    <a class="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary/20 dark:bg-primary/20" href="/api-keys.html">
+                        <span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">key</span>
+                        <p class="text-primary text-sm font-medium leading-normal">API Keys</p>
+                    </a>
+                    <a class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800/50" href="#">
+                        <span class="material-symbols-outlined text-gray-600 dark:text-gray-400">credit_card</span>
+                        <p class="text-gray-700 dark:text-gray-300 text-sm font-medium leading-normal">Billing</p>
+                    </a>
+                    <a class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800/50" href="#">
+                        <span class="material-symbols-outlined text-gray-600 dark:text-gray-400">settings</span>
+                        <p class="text-gray-700 dark:text-gray-300 text-sm font-medium leading-normal">Settings</p>
+                    </a>
+                </nav>
+            </div>
+            <div class="flex flex-col gap-4">
+                <button class="flex w-full cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-primary text-white text-sm font-bold leading-normal tracking-[0.015em] hover:bg-primary/90">
+                    <span class="truncate">Create Agent</span>
+                </button>
+                <div class="flex flex-col gap-1">
+                    <a class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800/50" href="#">
+                        <span class="material-symbols-outlined text-gray-600 dark:text-gray-400">menu_book</span>
+                        <p class="text-gray-700 dark:text-gray-300 text-sm font-medium leading-normal">Documentation</p>
+                    </a>
+                    <a class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800/50" href="#">
+                        <span class="material-symbols-outlined text-gray-600 dark:text-gray-400">help</span>
+                        <p class="text-gray-700 dark:text-gray-300 text-sm font-medium leading-normal">Support</p>
+                    </a>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 p-8 overflow-y-auto">
+            <div class="max-w-7xl mx-auto">
+                <!-- PageHeading -->
+                <header class="flex flex-wrap justify-between items-start gap-4 mb-8">
+                    <div class="flex flex-col gap-3">
+                        <h1 class="text-gray-900 dark:text-white text-4xl font-black leading-tight tracking-[-0.033em]">API Keys</h1>
+                        <p class="text-gray-500 dark:text-gray-400 text-base font-normal leading-normal">Manage and generate API keys to interact with the ZeroState API.</p>
+                    </div>
+                    <button class="flex min-w-[84px] cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-lg h-10 px-4 bg-primary text-white text-sm font-bold leading-normal tracking-[0.015em] hover:bg-primary/90">
+                        <span class="material-symbols-outlined !text-xl">add</span>
+                        <span class="truncate">Generate New Key</span>
+                    </button>
+                </header>
+
+                <!-- SectionHeader: Usage Quotas -->
+                <h2 class="text-gray-900 dark:text-white text-[22px] font-bold leading-tight tracking-[-0.015em] mb-4">Usage Quotas</h2>
+
+                <!-- Stats -->
+                <section class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-10">
+                    <div class="flex flex-col gap-2 rounded-lg p-6 bg-white dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800">
+                        <p class="text-gray-600 dark:text-gray-300 text-base font-medium leading-normal">API Calls Used</p>
+                        <div class="flex items-baseline gap-2">
+                            <p class="text-gray-900 dark:text-white tracking-light text-2xl font-bold leading-tight">1,234</p>
+                            <p class="text-gray-500 dark:text-gray-400">/ 10,000</p>
+                        </div>
+                        <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 mt-2">
+                            <div class="bg-primary h-1.5 rounded-full" style="width: 12.34%"></div>
+                        </div>
+                    </div>
+                    <div class="flex flex-col gap-2 rounded-lg p-6 bg-white dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800">
+                        <p class="text-gray-600 dark:text-gray-300 text-base font-medium leading-normal">Rate Limit</p>
+                        <p class="text-gray-900 dark:text-white tracking-light text-2xl font-bold leading-tight">100 RPM</p>
+                        <p class="text-gray-500 dark:text-gray-400 text-sm">Requests per minute</p>
+                    </div>
+                    <div class="flex flex-col gap-2 rounded-lg p-6 bg-white dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800">
+                        <p class="text-gray-600 dark:text-gray-300 text-base font-medium leading-normal">Quota Resets</p>
+                        <p class="text-gray-900 dark:text-white tracking-light text-2xl font-bold leading-tight">in 15 days</p>
+                        <p class="text-gray-500 dark:text-gray-400 text-sm">on May 31, 2024</p>
+                    </div>
+                </section>
+
+                <!-- SectionHeader: Active Keys -->
+                <h2 class="text-gray-900 dark:text-white text-[22px] font-bold leading-tight tracking-[-0.015em] mb-4">Active Keys</h2>
+
+                <!-- API Keys Table -->
+                <div class="bg-white dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm text-left">
+                            <thead class="bg-gray-50 dark:bg-gray-900 text-xs text-gray-700 dark:text-gray-400 uppercase tracking-wider">
+                                <tr>
+                                    <th class="px-6 py-3" scope="col">Key Name</th>
+                                    <th class="px-6 py-3" scope="col">API Key</th>
+                                    <th class="px-6 py-3" scope="col">Status</th>
+                                    <th class="px-6 py-3" scope="col">Created</th>
+                                    <th class="px-6 py-3" scope="col">Last Used</th>
+                                    <th class="px-6 py-3" scope="col"><span class="sr-only">Actions</span></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr class="border-b dark:border-gray-800">
+                                    <th class="px-6 py-4 font-medium text-gray-900 dark:text-white whitespace-nowrap" scope="row">Production Key</th>
+                                    <td class="px-6 py-4 font-mono">zs_live_•••••••••••••••••2k4h</td>
+                                    <td class="px-6 py-4">
+                                        <span class="inline-flex items-center bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300 text-xs font-medium px-2.5 py-0.5 rounded-full">
+                                            <span class="w-2 h-2 me-1 bg-green-500 rounded-full"></span>
+                                            Active
+                                        </span>
+                                    </td>
+                                    <td class="px-6 py-4">Apr 20, 2024</td>
+                                    <td class="px-6 py-4">May 15, 2024</td>
+                                    <td class="px-6 py-4 text-right">
+                                        <button class="text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"><span class="material-symbols-outlined">more_horiz</span></button>
+                                    </td>
+                                </tr>
+                                <tr class="border-b dark:border-gray-800">
+                                    <th class="px-6 py-4 font-medium text-gray-900 dark:text-white whitespace-nowrap" scope="row">Staging Environment</th>
+                                    <td class="px-6 py-4 font-mono">zs_test_•••••••••••••••••9j8b</td>
+                                    <td class="px-6 py-4">
+                                        <span class="inline-flex items-center bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300 text-xs font-medium px-2.5 py-0.5 rounded-full">
+                                            <span class="w-2 h-2 me-1 bg-green-500 rounded-full"></span>
+                                            Active
+                                        </span>
+                                    </td>
+                                    <td class="px-6 py-4">Mar 11, 2024</td>
+                                    <td class="px-6 py-4">May 1, 2024</td>
+                                    <td class="px-6 py-4 text-right">
+                                        <button class="text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"><span class="material-symbols-outlined">more_horiz</span></button>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th class="px-6 py-4 font-medium text-gray-900 dark:text-white whitespace-nowrap" scope="row">Legacy Project Key</th>
+                                    <td class="px-6 py-4 font-mono">zs_live_•••••••••••••••••a1c3</td>
+                                    <td class="px-6 py-4">
+                                        <span class="inline-flex items-center bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300 text-xs font-medium px-2.5 py-0.5 rounded-full">
+                                            <span class="w-2 h-2 me-1 bg-red-500 rounded-full"></span>
+                                            Revoked
+                                        </span>
+                                    </td>
+                                    <td class="px-6 py-4">Jan 05, 2024</td>
+                                    <td class="px-6 py-4">Feb 28, 2024</td>
+                                    <td class="px-6 py-4 text-right">
+                                        <button class="text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"><span class="material-symbols-outlined">more_horiz</span></button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- SectionHeader: Developer Resources -->
+                <h2 class="text-gray-900 dark:text-white text-[22px] font-bold leading-tight tracking-[-0.015em] mt-10 mb-4">Developer Resources</h2>
+
+                <!-- Code Snippet -->
+                <div class="bg-gray-900 rounded-lg p-4">
+                    <div class="flex justify-between items-center mb-2">
+                        <p class="text-sm font-semibold text-gray-300">Python Example: Authenticated Request</p>
+                        <button class="flex items-center gap-2 text-gray-400 hover:text-white text-xs font-medium" id="copyCodeBtn">
+                            <span class="material-symbols-outlined !text-base">content_copy</span>
+                            Copy
+                        </button>
+                    </div>
+                    <pre><code class="language-python text-sm text-gray-400 block whitespace-pre-wrap" id="codeSnippet">import requests
+
+api_key = "YOUR_API_KEY"
+headers = {
+    "Authorization": f"Bearer {api_key}"
+}
+response = requests.get(
+    "https://api.zerostate.ai/v1/agents",
+    headers=headers
+)
+print(response.json())</code></pre>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+    <script>
+        // Initialize AuthManager
+        const auth = new AuthManager();
+
+        // Check authentication
+        if (!auth.isAuthenticated()) {
+            window.location.href = '/login.html';
+        }
+
+        // Load user data
+        const userData = localStorage.getItem('zerostate_user_data');
+        if (userData) {
+            const user = JSON.parse(userData);
+            document.getElementById('userName').textContent = user.full_name || 'Developer';
+            document.getElementById('userEmail').textContent = user.email;
+        }
+
+        // Copy code snippet functionality
+        document.getElementById('copyCodeBtn').addEventListener('click', async function() {
+            const codeSnippet = document.getElementById('codeSnippet').textContent;
+            try {
+                await navigator.clipboard.writeText(codeSnippet);
+                this.innerHTML = '<span class="material-symbols-outlined !text-base">check</span> Copied';
+                setTimeout(() => {
+                    this.innerHTML = '<span class="material-symbols-outlined !text-base">content_copy</span> Copy';
+                }, 2000);
+            } catch (err) {
+                console.error('Failed to copy:', err);
+            }
+        });
+    </script>
+</body>
+</html>
