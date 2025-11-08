@@ -19,4 +19,5 @@ use (
 	./libs/routing
 	./libs/search
 	./libs/telemetry
+	./libs/validation
 )

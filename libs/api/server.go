@@ -186,6 +186,13 @@ func (s *Server) setupRoutes() {
 				agents.PUT("/:id", s.handlers.UpdateAgent)
 				agents.DELETE("/:id", s.handlers.DeleteAgent)
 				agents.GET("/search", s.handlers.SearchAgents)
+
+				// Agent WASM binary upload and management
+				agents.POST("/:id/binary", s.handlers.UploadAgent)
+				agents.GET("/:id/binary", s.handlers.GetAgentBinary)
+				agents.DELETE("/:id/binary", s.handlers.DeleteAgentBinary)
+				agents.GET("/:id/versions", s.handlers.ListAgentVersions)
+				agents.PUT("/:id/binary", s.handlers.UpdateAgentBinary)
 			}
 
 			// Task management
