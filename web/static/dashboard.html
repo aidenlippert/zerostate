@@ -1,141 +1,449 @@
 <!DOCTYPE html>
-<html lang="en">
+<html class="dark" lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard - ZeroState</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>ZeroState Dashboard</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com" rel="preconnect"/>
+    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@400" rel="stylesheet"/>
     <script src="/static/js/app.js" defer></script>
+    <style>
+        .card-glow-effect {
+            position: relative;
+            overflow: hidden;
+        }
+        .card-glow-effect::after {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(99, 102, 241, 0.15) 0%, transparent 40%);
+            transform: translate(var(--x, -100%), var(--y, -100%));
+            transition: transform 0.3s ease-out;
+            pointer-events: none;
+            z-index: 0;
+        }
+        .card-glow-effect > * {
+            position: relative;
+            z-index: 1;
+        }
+    </style>
+    <script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary": "#6366F1",
+              "surface-dark": "#0F1419",
+              "background-dark": "#0A0E13",
+            },
+            fontFamily: {
+              "display": ["Sora", "sans-serif"]
+            },
+            borderRadius: {
+              "DEFAULT": "0.5rem",
+              "lg": "0.75rem",
+              "xl": "1rem",
+            },
+          },
+        },
+      }
+    </script>
 </head>
-<body class="bg-gray-900 min-h-screen">
-    <div id="app">
-        <!-- Navigation -->
-        <nav class="bg-gray-800 border-b border-gray-700">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div class="flex items-center justify-between h-16">
-                    <div class="flex items-center">
-                        <div class="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-600">
-                            ZeroState
-                        </div>
-                    </div>
-                    <div class="flex items-center space-x-4">
-                        <span id="userEmail" class="text-gray-300 text-sm"></span>
-                        <button id="logoutBtn" class="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm font-medium">
-                            Logout
-                        </button>
-                    </div>
+<body class="font-display bg-background-dark text-white">
+    <!-- Header -->
+    <header class="sticky top-0 z-50 bg-surface-dark border-b border-gray-800 backdrop-blur-sm bg-opacity-95">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center">
+                    <h1 class="text-2xl font-bold text-primary">ZeroState</h1>
+                    <nav class="hidden md:flex ml-10 space-x-8">
+                        <a class="text-white font-semibold border-b-2 border-primary pb-1" href="/dashboard.html">Dashboard</a>
+                        <a class="text-gray-400 hover:text-white transition-colors" href="/agents.html">Agents</a>
+                        <a class="text-gray-400 hover:text-white transition-colors" href="/tasks.html">Tasks</a>
+                        <a class="text-gray-400 hover:text-white transition-colors" href="/analytics.html">Analytics</a>
+                        <a class="text-gray-400 hover:text-white transition-colors" href="/api-keys.html">API Keys</a>
+                    </nav>
                 </div>
-            </div>
-        </nav>
-
-        <!-- Main Content -->
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <!-- Welcome Section -->
-            <div class="mb-8">
-                <h1 class="text-3xl font-bold text-white">Dashboard</h1>
-                <p class="mt-2 text-gray-400">Welcome back, <span id="userName" class="text-purple-400"></span>!</p>
-            </div>
-
-            <!-- Quick Stats -->
-            <div class="grid grid-cols-1 gap-6 sm:grid-cols-3 mb-8">
-                <div class="bg-gray-800 rounded-lg p-6 border border-gray-700">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <p class="text-sm font-medium text-gray-400">Active Agents</p>
-                            <p id="activeAgents" class="mt-2 text-3xl font-semibold text-white">0</p>
-                        </div>
-                        <div class="text-4xl">🤖</div>
-                    </div>
-                </div>
-
-                <div class="bg-gray-800 rounded-lg p-6 border border-gray-700">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <p class="text-sm font-medium text-gray-400">Tasks Completed</p>
-                            <p id="tasksCompleted" class="mt-2 text-3xl font-semibold text-white">0</p>
-                        </div>
-                        <div class="text-4xl">✅</div>
-                    </div>
-                </div>
-
-                <div class="bg-gray-800 rounded-lg p-6 border border-gray-700">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <p class="text-sm font-medium text-gray-400">Total Earnings</p>
-                            <p id="totalEarnings" class="mt-2 text-3xl font-semibold text-white">$0</p>
-                        </div>
-                        <div class="text-4xl">💰</div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Quick Actions -->
-            <div class="bg-gray-800 rounded-lg p-6 border border-gray-700 mb-8">
-                <h2 class="text-xl font-semibold text-white mb-4">Quick Actions</h2>
-                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                    <a href="/agents.html" class="flex items-center p-4 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors">
-                        <span class="text-2xl mr-3">🤖</span>
-                        <span class="text-white font-medium">Browse Agents</span>
-                    </a>
-                    <button class="flex items-center p-4 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors">
-                        <span class="text-2xl mr-3">📝</span>
-                        <span class="text-white font-medium">Submit Task</span>
+                <div class="flex items-center space-x-4">
+                    <button class="relative p-2 text-gray-400 hover:text-white transition-colors">
+                        <span class="material-symbols-outlined">notifications</span>
+                        <span class="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
                     </button>
-                    <button class="flex items-center p-4 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors">
-                        <span class="text-2xl mr-3">📊</span>
-                        <span class="text-white font-medium">View Analytics</span>
-                    </button>
-                    <button class="flex items-center p-4 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors">
-                        <span class="text-2xl mr-3">⚙️</span>
-                        <span class="text-white font-medium">Settings</span>
-                    </button>
-                </div>
-            </div>
-
-            <!-- Recent Activity -->
-            <div class="bg-gray-800 rounded-lg p-6 border border-gray-700">
-                <h2 class="text-xl font-semibold text-white mb-4">Recent Activity</h2>
-                <div id="recentActivity" class="space-y-4">
-                    <p class="text-gray-400 text-center py-8">No recent activity</p>
+                    <div class="w-10 h-10 rounded-full bg-gradient-to-r from-primary to-purple-500 flex items-center justify-center text-white font-bold cursor-pointer">
+                        <span id="userInitials">U</span>
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Welcome Section -->
+        <div class="mb-8">
+            <h2 class="text-3xl font-bold mb-2" id="welcomeMessage">Welcome Back</h2>
+            <p class="text-gray-400" id="currentDateTime">Loading...</p>
+        </div>
+
+        <!-- Stats Cards -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <!-- Active Agents -->
+            <div class="bg-surface-dark p-6 rounded-lg border border-gray-800 card-glow-effect">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-sm font-semibold text-gray-400">Active Agents</h3>
+                    <span class="material-symbols-outlined text-green-500">dns</span>
+                </div>
+                <p class="text-3xl font-bold mt-2 text-white">24</p>
+                <p class="text-sm text-gray-500 mt-1">+2 since last week</p>
+            </div>
+
+            <!-- Tasks Completed -->
+            <div class="bg-surface-dark p-6 rounded-lg border border-gray-800 card-glow-effect">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-sm font-semibold text-gray-400">Tasks (24h)</h3>
+                    <span class="material-symbols-outlined text-blue-500">task_alt</span>
+                </div>
+                <p class="text-3xl font-bold mt-2 text-white">1,283</p>
+                <p class="text-sm text-green-500 mt-1">+12% from yesterday</p>
+            </div>
+
+            <!-- Network Calls -->
+            <div class="bg-surface-dark p-6 rounded-lg border border-gray-800 card-glow-effect">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-sm font-semibold text-gray-400">Network Calls</h3>
+                    <span class="material-symbols-outlined text-purple-500">trending_up</span>
+                </div>
+                <p class="text-3xl font-bold mt-2 text-white">72,491</p>
+                <p class="text-sm text-gray-500 mt-1">65% of monthly limit</p>
+            </div>
+
+            <!-- Errors -->
+            <div class="bg-surface-dark p-6 rounded-lg border border-gray-800 card-glow-effect">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-sm font-semibold text-gray-400">Errors</h3>
+                    <span class="material-symbols-outlined text-red-500">error</span>
+                </div>
+                <p class="text-3xl font-bold mt-2 text-white">12</p>
+                <p class="text-sm text-green-500 mt-1">-5% from last week</p>
+            </div>
+        </div>
+
+        <!-- Main Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Left Column - Recent Activity & Active Tasks -->
+            <div class="lg:col-span-2 space-y-6">
+                <!-- Recent Activity -->
+                <div class="bg-surface-dark p-6 rounded-lg border border-gray-800">
+                    <h3 class="text-xl font-bold mb-4">Recent Activity</h3>
+                    <div class="space-y-4">
+                        <div class="flex items-start space-x-4">
+                            <div class="w-10 h-10 rounded-full bg-green-500 bg-opacity-20 flex items-center justify-center flex-shrink-0">
+                                <span class="material-symbols-outlined text-green-500 text-sm">check_circle</span>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <p class="text-sm font-medium text-white">Task completed: Image Classification</p>
+                                <p class="text-xs text-gray-400">Agent-7F3A completed batch processing</p>
+                                <p class="text-xs text-gray-500 mt-1">2 minutes ago</p>
+                            </div>
+                        </div>
+
+                        <div class="flex items-start space-x-4">
+                            <div class="w-10 h-10 rounded-full bg-blue-500 bg-opacity-20 flex items-center justify-center flex-shrink-0">
+                                <span class="material-symbols-outlined text-blue-500 text-sm">rocket_launch</span>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <p class="text-sm font-medium text-white">New agent deployed</p>
+                                <p class="text-xs text-gray-400">Agent-9B2C is now active</p>
+                                <p class="text-xs text-gray-500 mt-1">15 minutes ago</p>
+                            </div>
+                        </div>
+
+                        <div class="flex items-start space-x-4">
+                            <div class="w-10 h-10 rounded-full bg-yellow-500 bg-opacity-20 flex items-center justify-center flex-shrink-0">
+                                <span class="material-symbols-outlined text-yellow-500 text-sm">warning</span>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <p class="text-sm font-medium text-white">Performance warning</p>
+                                <p class="text-xs text-gray-400">Agent-4D1F response time elevated</p>
+                                <p class="text-xs text-gray-500 mt-1">1 hour ago</p>
+                            </div>
+                        </div>
+
+                        <div class="flex items-start space-x-4">
+                            <div class="w-10 h-10 rounded-full bg-purple-500 bg-opacity-20 flex items-center justify-center flex-shrink-0">
+                                <span class="material-symbols-outlined text-purple-500 text-sm">payments</span>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <p class="text-sm font-medium text-white">Payment received</p>
+                                <p class="text-xs text-gray-400">$124.50 for completed tasks</p>
+                                <p class="text-xs text-gray-500 mt-1">3 hours ago</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Active Tasks -->
+                <div class="bg-surface-dark p-6 rounded-lg border border-gray-800">
+                    <h3 class="text-xl font-bold mb-4">Active Tasks</h3>
+                    <div class="overflow-x-auto">
+                        <table class="w-full">
+                            <thead>
+                                <tr class="text-left text-xs text-gray-400 border-b border-gray-800">
+                                    <th class="pb-3 font-semibold">Task ID</th>
+                                    <th class="pb-3 font-semibold">Agent</th>
+                                    <th class="pb-3 font-semibold">Status</th>
+                                    <th class="pb-3 font-semibold">Progress</th>
+                                </tr>
+                            </thead>
+                            <tbody class="text-sm">
+                                <tr class="border-b border-gray-800">
+                                    <td class="py-4 text-primary font-medium">TSK-9847</td>
+                                    <td class="py-4 text-gray-300">Agent-2A5F</td>
+                                    <td class="py-4">
+                                        <span class="px-2 py-1 bg-blue-500 bg-opacity-20 text-blue-400 rounded text-xs font-medium">Running</span>
+                                    </td>
+                                    <td class="py-4">
+                                        <div class="flex items-center space-x-2">
+                                            <div class="flex-1 bg-gray-700 rounded-full h-2">
+                                                <div class="bg-blue-500 h-2 rounded-full" style="width: 67%"></div>
+                                            </div>
+                                            <span class="text-xs text-gray-400">67%</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr class="border-b border-gray-800">
+                                    <td class="py-4 text-primary font-medium">TSK-9846</td>
+                                    <td class="py-4 text-gray-300">Agent-7F3A</td>
+                                    <td class="py-4">
+                                        <span class="px-2 py-1 bg-yellow-500 bg-opacity-20 text-yellow-400 rounded text-xs font-medium">Queued</span>
+                                    </td>
+                                    <td class="py-4">
+                                        <div class="flex items-center space-x-2">
+                                            <div class="flex-1 bg-gray-700 rounded-full h-2">
+                                                <div class="bg-yellow-500 h-2 rounded-full" style="width: 0%"></div>
+                                            </div>
+                                            <span class="text-xs text-gray-400">0%</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="py-4 text-primary font-medium">TSK-9845</td>
+                                    <td class="py-4 text-gray-300">Agent-1C9D</td>
+                                    <td class="py-4">
+                                        <span class="px-2 py-1 bg-blue-500 bg-opacity-20 text-blue-400 rounded text-xs font-medium">Running</span>
+                                    </td>
+                                    <td class="py-4">
+                                        <div class="flex items-center space-x-2">
+                                            <div class="flex-1 bg-gray-700 rounded-full h-2">
+                                                <div class="bg-blue-500 h-2 rounded-full" style="width: 34%"></div>
+                                            </div>
+                                            <span class="text-xs text-gray-400">34%</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column - Quick Actions & Network Health -->
+            <div class="space-y-6">
+                <!-- Quick Actions -->
+                <div class="bg-surface-dark p-6 rounded-lg border border-gray-800">
+                    <h3 class="text-xl font-bold mb-4">Quick Actions</h3>
+                    <div class="space-y-3">
+                        <button class="w-full flex items-center justify-center space-x-2 bg-primary hover:bg-opacity-90 text-white py-3 px-4 rounded-lg transition-all font-medium">
+                            <span class="material-symbols-outlined text-sm">add</span>
+                            <span>Deploy New Agent</span>
+                        </button>
+                        <button class="w-full flex items-center justify-center space-x-2 bg-gray-800 hover:bg-gray-700 text-white py-3 px-4 rounded-lg transition-all font-medium">
+                            <span class="material-symbols-outlined text-sm">play_arrow</span>
+                            <span>Run New Task</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Network Health -->
+                <div class="bg-surface-dark p-6 rounded-lg border border-gray-800">
+                    <h3 class="text-xl font-bold mb-4">Network Health</h3>
+                    <div class="flex items-center justify-between mb-4">
+                        <span class="text-gray-400">Status</span>
+                        <div class="flex items-center space-x-2">
+                            <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                            <span class="text-green-500 font-medium">Healthy</span>
+                        </div>
+                    </div>
+                    <div class="space-y-3">
+                        <div>
+                            <div class="flex justify-between text-sm mb-1">
+                                <span class="text-gray-400">Uptime</span>
+                                <span class="text-white font-medium">99.97%</span>
+                            </div>
+                            <div class="bg-gray-700 rounded-full h-2">
+                                <div class="bg-green-500 h-2 rounded-full" style="width: 99.97%"></div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-sm mb-1">
+                                <span class="text-gray-400">Avg Response</span>
+                                <span class="text-white font-medium">124ms</span>
+                            </div>
+                            <div class="bg-gray-700 rounded-full h-2">
+                                <div class="bg-blue-500 h-2 rounded-full" style="width: 75%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Top Performing Agents -->
+                <div class="bg-surface-dark p-6 rounded-lg border border-gray-800">
+                    <h3 class="text-xl font-bold mb-4">Top Performers</h3>
+                    <div class="space-y-4">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-8 h-8 rounded-full bg-gradient-to-r from-green-500 to-emerald-500 flex items-center justify-center text-white text-xs font-bold">1</div>
+                                <div>
+                                    <p class="text-sm font-medium text-white">Agent-7F3A</p>
+                                    <p class="text-xs text-gray-400">432 tasks</p>
+                                </div>
+                            </div>
+                            <span class="text-green-500 text-sm font-medium">98.5%</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 flex items-center justify-center text-white text-xs font-bold">2</div>
+                                <div>
+                                    <p class="text-sm font-medium text-white">Agent-2A5F</p>
+                                    <p class="text-xs text-gray-400">389 tasks</p>
+                                </div>
+                            </div>
+                            <span class="text-green-500 text-sm font-medium">97.8%</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-8 h-8 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center text-white text-xs font-bold">3</div>
+                                <div>
+                                    <p class="text-sm font-medium text-white">Agent-1C9D</p>
+                                    <p class="text-xs text-gray-400">367 tasks</p>
+                                </div>
+                            </div>
+                            <span class="text-green-500 text-sm font-medium">96.9%</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Upcoming Scheduled Tasks -->
+                <div class="bg-surface-dark p-6 rounded-lg border border-gray-800">
+                    <h3 class="text-xl font-bold mb-4">Scheduled</h3>
+                    <div class="space-y-3">
+                        <div class="flex items-start space-x-3">
+                            <div class="w-12 h-12 rounded-lg bg-primary bg-opacity-20 flex flex-col items-center justify-center flex-shrink-0">
+                                <span class="text-xs text-gray-400">Mar</span>
+                                <span class="text-lg font-bold text-primary">24</span>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <p class="text-sm font-medium text-white">System Maintenance</p>
+                                <p class="text-xs text-gray-400">Scheduled downtime window</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start space-x-3">
+                            <div class="w-12 h-12 rounded-lg bg-purple-500 bg-opacity-20 flex flex-col items-center justify-center flex-shrink-0">
+                                <span class="text-xs text-gray-400">Mar</span>
+                                <span class="text-lg font-bold text-purple-500">26</span>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <p class="text-sm font-medium text-white">Model Retraining</p>
+                                <p class="text-xs text-gray-400">Monthly optimization cycle</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Performance Chart -->
+        <div class="mt-6 bg-surface-dark p-6 rounded-lg border border-gray-800">
+            <h3 class="text-xl font-bold mb-4">Performance Overview</h3>
+            <div class="h-64 flex items-end justify-between space-x-2">
+                <svg class="w-full h-full" viewBox="0 0 800 200" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <linearGradient id="gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" style="stop-color:#6366F1;stop-opacity:0.8" />
+                            <stop offset="100%" style="stop-color:#6366F1;stop-opacity:0.1" />
+                        </linearGradient>
+                    </defs>
+                    <path d="M 0 180 L 100 160 L 200 140 L 300 120 L 400 100 L 500 90 L 600 80 L 700 60 L 800 40 L 800 200 L 0 200 Z" fill="url(#gradient)"/>
+                    <path d="M 0 180 L 100 160 L 200 140 L 300 120 L 400 100 L 500 90 L 600 80 L 700 60 L 800 40" stroke="#6366F1" stroke-width="2" fill="none"/>
+                </svg>
+            </div>
+            <div class="flex justify-between mt-4 text-xs text-gray-400">
+                <span>Mon</span>
+                <span>Tue</span>
+                <span>Wed</span>
+                <span>Thu</span>
+                <span>Fri</span>
+                <span>Sat</span>
+                <span>Sun</span>
+            </div>
+        </div>
+    </main>
 
     <script>
         // Initialize dashboard
-        document.addEventListener('DOMContentLoaded', async () => {
-            const auth = new AuthManager();
-
+        document.addEventListener('DOMContentLoaded', () => {
             // Check authentication
+            const auth = new AuthManager();
             if (!auth.isAuthenticated()) {
-                window.location.href = '/';
+                window.location.href = '/login.html';
                 return;
             }
 
-            // Display user info
-            const userData = auth.getUserData();
+            // Personalize welcome message
+            const userData = localStorage.getItem('zerostate_user_data');
             if (userData) {
-                document.getElementById('userName').textContent = userData.full_name;
-                document.getElementById('userEmail').textContent = userData.email;
+                try {
+                    const user = JSON.parse(userData);
+                    const firstName = user.full_name ? user.full_name.split(' ')[0] : user.email.split('@')[0];
+                    document.getElementById('welcomeMessage').textContent = `Welcome Back, ${firstName}`;
+
+                    // Set user initials
+                    const initials = user.full_name
+                        ? user.full_name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()
+                        : user.email.substring(0, 2).toUpperCase();
+                    document.getElementById('userInitials').textContent = initials;
+                } catch (e) {
+                    console.error('Error parsing user data:', e);
+                }
             }
 
-            // Logout handler
-            document.getElementById('logoutBtn').addEventListener('click', () => {
-                auth.logout();
-                window.location.href = '/';
+            // Update date/time
+            function updateDateTime() {
+                const now = new Date();
+                const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' };
+                document.getElementById('currentDateTime').textContent = now.toLocaleDateString('en-US', options);
+            }
+            updateDateTime();
+            setInterval(updateDateTime, 60000); // Update every minute
+
+            // Card glow effect
+            const cards = document.querySelectorAll('.card-glow-effect');
+            cards.forEach(card => {
+                card.addEventListener('mousemove', (e) => {
+                    const rect = card.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    const y = e.clientY - rect.top;
+                    card.style.setProperty('--x', `${x}px`);
+                    card.style.setProperty('--y', `${y}px`);
+                });
             });
-
-            // Load dashboard data
-            try {
-                const apiClient = new APIClient(auth);
-
-                // TODO: Load actual data from API
-                // For now, showing placeholder data
-
-            } catch (error) {
-                console.error('Failed to load dashboard data:', error);
-            }
         });
     </script>
 </body>
