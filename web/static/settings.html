@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>ZeroState - Account Settings</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com" rel="preconnect"/>
+    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+    <script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#4A90E2",
+                        "background-light": "#f6f6f8",
+                        "background-dark": "#121212",
+                    },
+                    fontFamily: {
+                        "display": ["Space Grotesk", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px",
+                    },
+                },
+            },
+        }
+    </script>
+    <style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+</head>
+<body class="font-display bg-background-light dark:bg-background-dark">
+    <div class="relative flex min-h-screen w-full flex-col">
+        <div class="flex flex-1">
+            <!-- SideNavBar -->
+            <aside class="flex w-64 flex-col bg-[#1E1E1E]/50 p-4 border-r border-white/10">
+                <div class="flex flex-col gap-4">
+                    <div class="flex items-center gap-3 p-2">
+                        <div class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" id="sidebarAvatar" style='background-image: url("https://cdn.usegalileo.ai/stability/d1abe0c9-28ec-422c-9301-b6d5d0b87c23.png");'></div>
+                        <div class="flex flex-col">
+                            <h1 class="text-[#EAEAEA] text-base font-medium leading-normal" id="sidebarName">User</h1>
+                            <p class="text-[#A0A0A0] text-sm font-normal leading-normal" id="sidebarEmail">user@zerostate.ai</p>
+                        </div>
+                    </div>
+                    <nav class="flex flex-col gap-2 mt-4">
+                        <a class="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary/20 text-primary" href="#profile" id="profileTab">
+                            <span class="material-symbols-outlined text-2xl">person</span>
+                            <p class="text-sm font-medium leading-normal">Profile</p>
+                        </a>
+                        <a class="flex items-center gap-3 px-3 py-2 rounded-lg text-[#EAEAEA] hover:bg-white/10 transition-colors" href="#notifications" id="notificationsTab">
+                            <span class="material-symbols-outlined text-2xl">notifications</span>
+                            <p class="text-sm font-medium leading-normal">Notifications</p>
+                        </a>
+                        <a class="flex items-center gap-3 px-3 py-2 rounded-lg text-[#EAEAEA] hover:bg-white/10 transition-colors" href="#billing" id="billingTab">
+                            <span class="material-symbols-outlined text-2xl">receipt_long</span>
+                            <p class="text-sm font-medium leading-normal">Billing</p>
+                        </a>
+                        <a class="flex items-center gap-3 px-3 py-2 rounded-lg text-[#EAEAEA] hover:bg-white/10 transition-colors" href="#security" id="securityTab">
+                            <span class="material-symbols-outlined text-2xl">shield</span>
+                            <p class="text-sm font-medium leading-normal">Security</p>
+                        </a>
+                    </nav>
+                </div>
+                <div class="mt-auto flex flex-col gap-1">
+                    <a class="flex items-center gap-3 px-3 py-2 rounded-lg text-[#EAEAEA] hover:bg-white/10 transition-colors" href="#">
+                        <span class="material-symbols-outlined text-2xl">help_center</span>
+                        <p class="text-sm font-medium leading-normal">Help Center</p>
+                    </a>
+                    <a class="flex items-center gap-3 px-3 py-2 rounded-lg text-[#EAEAEA] hover:bg-white/10 transition-colors" href="#" id="logoutBtn">
+                        <span class="material-symbols-outlined text-2xl">logout</span>
+                        <p class="text-sm font-medium leading-normal">Log Out</p>
+                    </a>
+                </div>
+            </aside>
+
+            <!-- Main Content Area -->
+            <main class="flex-1 p-8 md:p-12">
+                <div class="mx-auto max-w-4xl">
+                    <!-- Profile Section -->
+                    <section class="flex flex-col gap-8" id="profileSection">
+                        <!-- Page Heading -->
+                        <div class="flex flex-wrap justify-between gap-3">
+                            <div class="flex flex-col gap-2">
+                                <h1 class="text-[#EAEAEA] text-4xl font-bold leading-tight tracking-[-0.033em]">Profile Settings</h1>
+                                <p class="text-[#A0A0A0] text-base font-normal leading-normal">Manage your personal information and avatar.</p>
+                            </div>
+                        </div>
+
+                        <!-- Profile Header -->
+                        <div class="flex flex-col gap-6 rounded-xl border border-white/10 bg-[#1E1E1E] p-6 @container">
+                            <div class="flex w-full flex-col gap-4 @[520px]:flex-row @[520px]:justify-between @[520px]:items-center">
+                                <div class="flex items-center gap-6">
+                                    <div class="bg-center bg-no-repeat aspect-square bg-cover rounded-full w-24 h-24" id="profileAvatar" style='background-image: url("https://cdn.usegalileo.ai/stability/d1abe0c9-28ec-422c-9301-b6d5d0b87c23.png");'></div>
+                                    <div class="flex flex-col justify-center">
+                                        <p class="text-white text-[22px] font-bold leading-tight tracking-[-0.015em]" id="profileName">User</p>
+                                        <p class="text-[#A0A0A0] text-base font-normal leading-normal" id="userId">ID: ZS-loading...</p>
+                                    </div>
+                                </div>
+                                <button class="flex min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-white/10 text-white text-sm font-medium leading-normal tracking-[0.015em] w-full max-w-[480px] @[480px]:w-auto hover:bg-white/20 transition-colors">
+                                    <span class="truncate">Upload New Photo</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Form -->
+                        <div class="flex flex-col gap-6 rounded-xl border border-white/10 bg-[#1E1E1E] p-6">
+                            <form class="flex flex-col gap-6" id="profileForm">
+                                <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+                                    <label class="flex flex-col flex-1">
+                                        <p class="text-[#EAEAEA] text-sm font-medium leading-normal pb-2">Full Name</p>
+                                        <input id="fullName" class="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-[#EAEAEA] focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-white/10 bg-[#121212] focus:border-primary/80 h-12 placeholder:text-[#A0A0A0] px-3 text-base font-normal leading-normal" value=""/>
+                                    </label>
+                                    <label class="flex flex-col flex-1">
+                                        <p class="text-[#EAEAEA] text-sm font-medium leading-normal pb-2">Email Address</p>
+                                        <input id="emailAddress" class="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-[#EAEAEA] focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-white/10 bg-[#121212] focus:border-primary/80 h-12 placeholder:text-[#A0A0A0] px-3 text-base font-normal leading-normal" value=""/>
+                                    </label>
+                                </div>
+                                <div class="flex justify-end gap-3 pt-4 border-t border-white/10">
+                                    <button class="flex min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-white/10 text-white text-sm font-medium leading-normal hover:bg-white/20 transition-colors" type="button">
+                                        <span class="truncate">Cancel</span>
+                                    </button>
+                                    <button class="flex min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-primary text-white text-sm font-medium leading-normal hover:bg-primary/90 transition-colors" type="submit">
+                                        <span class="truncate">Save Changes</span>
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </section>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+    <script>
+        // Initialize AuthManager
+        const auth = new AuthManager();
+
+        // Check authentication
+        if (!auth.isAuthenticated()) {
+            window.location.href = '/login.html';
+        }
+
+        // Load user data
+        const userData = localStorage.getItem('zerostate_user_data');
+        if (userData) {
+            const user = JSON.parse(userData);
+
+            // Update sidebar
+            document.getElementById('sidebarName').textContent = user.full_name || 'User';
+            document.getElementById('sidebarEmail').textContent = user.email;
+
+            // Update profile section
+            document.getElementById('profileName').textContent = user.full_name || 'User';
+            document.getElementById('userId').textContent = `ID: ${user.id || 'ZS-' + user.email.substring(0, 8)}`;
+            document.getElementById('fullName').value = user.full_name || '';
+            document.getElementById('emailAddress').value = user.email;
+        }
+
+        // Tab switching functionality
+        const tabs = document.querySelectorAll('[id$="Tab"]');
+        tabs.forEach(tab => {
+            tab.addEventListener('click', function(e) {
+                e.preventDefault();
+                // Remove active state from all tabs
+                tabs.forEach(t => {
+                    t.classList.remove('bg-primary/20', 'text-primary');
+                    t.classList.add('text-[#EAEAEA]');
+                });
+                // Add active state to clicked tab
+                this.classList.remove('text-[#EAEAEA]');
+                this.classList.add('bg-primary/20', 'text-primary');
+            });
+        });
+
+        // Profile form submission
+        document.getElementById('profileForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const fullName = document.getElementById('fullName').value;
+            const emailAddress = document.getElementById('emailAddress').value;
+
+            // In a real implementation, this would call the API
+            // Example: await auth.updateProfile({ full_name: fullName, email: emailAddress });
+
+            // Update localStorage for now
+            const currentUser = JSON.parse(localStorage.getItem('zerostate_user_data'));
+            currentUser.full_name = fullName;
+            currentUser.email = emailAddress;
+            localStorage.setItem('zerostate_user_data', JSON.stringify(currentUser));
+
+            // Show success message (you could add a toast notification here)
+            alert('Profile updated successfully!');
+        });
+
+        // Logout functionality
+        document.getElementById('logoutBtn').addEventListener('click', function(e) {
+            e.preventDefault();
+            auth.logout();
+            window.location.href = '/login.html';
+        });
+    </script>
+</body>
+</html>
