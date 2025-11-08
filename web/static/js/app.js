@@ -4,7 +4,10 @@
 // ======================
 // Configuration
 // ======================
-const API_BASE_URL = window.location.origin + '/api/v1';
+// Use production API on Vercel, local API otherwise
+const API_BASE_URL = window.location.hostname.includes('vercel.app')
+    ? 'https://zerostate-api.fly.dev/api/v1'
+    : window.location.origin + '/api/v1';
 const AUTH_TOKEN_KEY = 'zerostate_auth_token';
 const USER_DATA_KEY = 'zerostate_user_data';
 
