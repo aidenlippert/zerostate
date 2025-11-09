@@ -1,4 +1,4 @@
-module github.com/zerostate/libs/telemetry
+module github.com/aidenlippert/zerostate/libs/telemetry
 
 go 1.23.0
 

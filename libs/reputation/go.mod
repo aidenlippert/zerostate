@@ -1,4 +1,4 @@
-module github.com/zerostate/libs/reputation
+module github.com/aidenlippert/zerostate/libs/reputation
 
 go 1.22
 

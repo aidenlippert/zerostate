@@ -2,7 +2,7 @@ package economic
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/zerostate/libs/metrics"
+	"github.com/aidenlippert/zerostate/libs/metrics"
 )
 
 // EconomicMetrics holds all economic layer metrics

@@ -1,4 +1,4 @@
-module github.com/zerostate/libs/routing
+module github.com/aidenlippert/zerostate/libs/routing
 
 go 1.21
 

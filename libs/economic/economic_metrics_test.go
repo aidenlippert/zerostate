@@ -6,7 +6,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/zerostate/libs/metrics"
+	"github.com/aidenlippert/zerostate/libs/metrics"
 )
 
 func TestNewEconomicMetrics(t *testing.T) {

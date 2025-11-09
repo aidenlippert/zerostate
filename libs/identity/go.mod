@@ -1,4 +1,4 @@
-module github.com/zerostate/libs/identity
+module github.com/aidenlippert/zerostate/libs/identity
 
 go 1.21
 

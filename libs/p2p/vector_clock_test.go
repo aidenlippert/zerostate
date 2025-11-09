@@ -7,7 +7,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/zerostate/libs/identity"
+	"github.com/aidenlippert/zerostate/libs/identity"
 )
 
 func TestNewVectorClock(t *testing.T) {

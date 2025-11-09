@@ -8,7 +8,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-	"github.com/zerostate/libs/identity"
+	"github.com/aidenlippert/zerostate/libs/identity"
 )
 
 var (

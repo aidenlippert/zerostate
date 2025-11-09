@@ -1,4 +1,4 @@
-module github.com/zerostate/libs/p2p
+module github.com/aidenlippert/zerostate/libs/p2p
 
 go 1.24
 

@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/zerostate/libs/telemetry"
+	"github.com/aidenlippert/zerostate/libs/telemetry"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"

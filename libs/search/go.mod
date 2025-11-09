@@ -1,4 +1,4 @@
-module github.com/zerostate/libs/search
+module github.com/aidenlippert/zerostate/libs/search
 
 go 1.21
 

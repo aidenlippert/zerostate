@@ -1,4 +1,4 @@
-module github.com/zerostate/libs/metrics
+module github.com/aidenlippert/zerostate/libs/metrics
 
 go 1.24.10
 

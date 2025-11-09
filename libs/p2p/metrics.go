@@ -5,7 +5,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-	"github.com/zerostate/libs/metrics"
+	"github.com/aidenlippert/zerostate/libs/metrics"
 )
 
 // Legacy metrics (kept for backward compatibility)

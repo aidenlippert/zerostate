@@ -1,4 +1,4 @@
-module github.com/zerostate/libs/payment
+module github.com/aidenlippert/zerostate/libs/payment
 
 go 1.22
 

@@ -1,4 +1,4 @@
-module github.com/zerostate/libs/guild
+module github.com/aidenlippert/zerostate/libs/guild
 
 go 1.22
 
