@@ -603,19 +603,6 @@ func (pcs *PaymentChannelService) VerifyBalanceInvariant() error {
 	return nil
 }
 
-// GetChannel retrieves a payment channel by ID
-func (pcs *PaymentChannelService) GetChannel(ctx context.Context, channelID string) (*PaymentChannel, error) {
-	pcs.mu.RLock()
-	defer pcs.mu.RUnlock()
-
-	channel, exists := pcs.channels[channelID]
-	if !exists {
-		return nil, ErrChannelNotFound
-	}
-
-	return channel, nil
-}
-
 // GetTransactionHistory retrieves transaction history for a user
 func (pcs *PaymentChannelService) GetTransactionHistory(ctx context.Context, did string) ([]ChannelTransaction, error) {
 	pcs.mu.RLock()
