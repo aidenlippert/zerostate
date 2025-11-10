@@ -510,3 +510,550 @@ func (h *Handlers) GetOrchestrationStatus(c *gin.Context) {
 		"last_updated":         delegation.UpdatedAt.Format(time.RFC3339),
 	})
 }
+
+// Escrow Handlers
+
+// CreateEscrow handles escrow creation for task payments
+func (h *Handlers) CreateEscrow(c *gin.Context) {
+	logger := h.logger.With(zap.String("handler", "CreateEscrow"))
+
+	var req struct {
+		TaskID              string  `json:"task_id" binding:"required"`
+		PayeeID             string  `json:"payee_id" binding:"required"`
+		Amount              float64 `json:"amount" binding:"required,gt=0"`
+		ExpirationMinutes   int     `json:"expiration_minutes" binding:"required,gt=0"`
+		AutoReleaseMinutes  *int    `json:"auto_release_minutes"`
+		Conditions          string  `json:"conditions"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		logger.Error("invalid request", zap.Error(err))
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "invalid request",
+			"message": err.Error(),
+		})
+		return
+	}
+
+	// Extract user ID from JWT token (payer)
+	userID, exists := c.Get("user_id")
+	if !exists {
+		userID = "anonymous"
+	}
+	payerID := userID.(string)
+
+	// Create escrow using economic service
+	escrowSvc := economic.NewEscrowService(h.db.Conn(), h.logger)
+
+	escrow, err := escrowSvc.CreateEscrow(
+		c.Request.Context(),
+		req.TaskID,
+		payerID,
+		req.PayeeID,
+		req.Amount,
+		req.ExpirationMinutes,
+		req.AutoReleaseMinutes,
+		req.Conditions,
+	)
+	if err != nil {
+		logger.Error("failed to create escrow", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "failed to create escrow",
+			"message": err.Error(),
+		})
+		return
+	}
+
+	logger.Info("escrow created",
+		zap.String("escrow_id", escrow.ID.String()),
+		zap.String("task_id", req.TaskID),
+		zap.Float64("amount", req.Amount),
+	)
+
+	c.JSON(http.StatusOK, gin.H{
+		"escrow_id":    escrow.ID.String(),
+		"task_id":      escrow.TaskID,
+		"payer_id":     escrow.PayerID,
+		"payee_id":     escrow.PayeeID,
+		"amount":       escrow.Amount,
+		"status":       string(escrow.Status),
+		"expires_at":   escrow.ExpiresAt.Format(time.RFC3339),
+		"created_at":   escrow.CreatedAt.Format(time.RFC3339),
+	})
+}
+
+// FundEscrow handles funding an escrow
+func (h *Handlers) FundEscrow(c *gin.Context) {
+	logger := h.logger.With(zap.String("handler", "FundEscrow"))
+
+	escrowIDStr := c.Param("id")
+	escrowID, err := uuid.Parse(escrowIDStr)
+	if err != nil {
+		logger.Error("invalid escrow ID", zap.String("escrow_id", escrowIDStr), zap.Error(err))
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "invalid escrow ID",
+			"message": err.Error(),
+		})
+		return
+	}
+
+	var req struct {
+		Signature string `json:"signature" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		logger.Error("invalid request", zap.Error(err))
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "invalid request",
+			"message": err.Error(),
+		})
+		return
+	}
+
+	// Fund escrow
+	escrowSvc := economic.NewEscrowService(h.db.Conn(), h.logger)
+
+	err = escrowSvc.FundEscrow(c.Request.Context(), escrowID, req.Signature)
+	if err != nil {
+		logger.Error("failed to fund escrow", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "failed to fund escrow",
+			"message": err.Error(),
+		})
+		return
+	}
+
+	logger.Info("escrow funded", zap.String("escrow_id", escrowID.String()))
+
+	c.JSON(http.StatusOK, gin.H{
+		"escrow_id": escrowID.String(),
+		"status":    "funded",
+		"message":   "escrow successfully funded",
+	})
+}
+
+// ReleaseEscrow handles releasing escrow funds to payee
+func (h *Handlers) ReleaseEscrow(c *gin.Context) {
+	logger := h.logger.With(zap.String("handler", "ReleaseEscrow"))
+
+	escrowIDStr := c.Param("id")
+	escrowID, err := uuid.Parse(escrowIDStr)
+	if err != nil {
+		logger.Error("invalid escrow ID", zap.String("escrow_id", escrowIDStr), zap.Error(err))
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "invalid escrow ID",
+			"message": err.Error(),
+		})
+		return
+	}
+
+	// Extract user ID from JWT token
+	userID, exists := c.Get("user_id")
+	if !exists {
+		userID = "anonymous"
+	}
+	releasedBy := userID.(string)
+
+	// Release escrow
+	escrowSvc := economic.NewEscrowService(h.db.Conn(), h.logger)
+
+	err = escrowSvc.ReleaseEscrow(c.Request.Context(), escrowID, releasedBy)
+	if err != nil {
+		logger.Error("failed to release escrow", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "failed to release escrow",
+			"message": err.Error(),
+		})
+		return
+	}
+
+	logger.Info("escrow released",
+		zap.String("escrow_id", escrowID.String()),
+		zap.String("released_by", releasedBy),
+	)
+
+	c.JSON(http.StatusOK, gin.H{
+		"escrow_id": escrowID.String(),
+		"status":    "released",
+		"message":   "escrow successfully released to payee",
+	})
+}
+
+// RefundEscrow handles refunding escrow funds to payer
+func (h *Handlers) RefundEscrow(c *gin.Context) {
+	logger := h.logger.With(zap.String("handler", "RefundEscrow"))
+
+	escrowIDStr := c.Param("id")
+	escrowID, err := uuid.Parse(escrowIDStr)
+	if err != nil {
+		logger.Error("invalid escrow ID", zap.String("escrow_id", escrowIDStr), zap.Error(err))
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "invalid escrow ID",
+			"message": err.Error(),
+		})
+		return
+	}
+
+	// Extract user ID from JWT token
+	userID, exists := c.Get("user_id")
+	if !exists {
+		userID = "anonymous"
+	}
+	refundedBy := userID.(string)
+
+	// Refund escrow
+	escrowSvc := economic.NewEscrowService(h.db.Conn(), h.logger)
+
+	err = escrowSvc.RefundEscrow(c.Request.Context(), escrowID, refundedBy)
+	if err != nil {
+		logger.Error("failed to refund escrow", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "failed to refund escrow",
+			"message": err.Error(),
+		})
+		return
+	}
+
+	logger.Info("escrow refunded",
+		zap.String("escrow_id", escrowID.String()),
+		zap.String("refunded_by", refundedBy),
+	)
+
+	c.JSON(http.StatusOK, gin.H{
+		"escrow_id": escrowID.String(),
+		"status":    "refunded",
+		"message":   "escrow successfully refunded to payer",
+	})
+}
+
+// GetEscrow retrieves escrow details
+func (h *Handlers) GetEscrow(c *gin.Context) {
+	logger := h.logger.With(zap.String("handler", "GetEscrow"))
+
+	escrowIDStr := c.Param("id")
+	escrowID, err := uuid.Parse(escrowIDStr)
+	if err != nil {
+		logger.Error("invalid escrow ID", zap.String("escrow_id", escrowIDStr), zap.Error(err))
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "invalid escrow ID",
+			"message": err.Error(),
+		})
+		return
+	}
+
+	// Get escrow
+	escrowSvc := economic.NewEscrowService(h.db.Conn(), h.logger)
+
+	escrow, err := escrowSvc.GetEscrow(c.Request.Context(), escrowID)
+	if err != nil {
+		logger.Error("failed to get escrow", zap.Error(err))
+		c.JSON(http.StatusNotFound, gin.H{
+			"error":   "escrow not found",
+			"message": err.Error(),
+		})
+		return
+	}
+
+	response := gin.H{
+		"escrow_id":    escrow.ID.String(),
+		"task_id":      escrow.TaskID,
+		"payer_id":     escrow.PayerID,
+		"payee_id":     escrow.PayeeID,
+		"amount":       escrow.Amount,
+		"status":       string(escrow.Status),
+		"expires_at":   escrow.ExpiresAt.Format(time.RFC3339),
+		"created_at":   escrow.CreatedAt.Format(time.RFC3339),
+		"updated_at":   escrow.UpdatedAt.Format(time.RFC3339),
+	}
+
+	if escrow.FundedAt != nil {
+		response["funded_at"] = escrow.FundedAt.Format(time.RFC3339)
+	}
+	if escrow.ReleasedAt != nil {
+		response["released_at"] = escrow.ReleasedAt.Format(time.RFC3339)
+	}
+	if escrow.RefundedAt != nil {
+		response["refunded_at"] = escrow.RefundedAt.Format(time.RFC3339)
+	}
+	if escrow.AutoReleaseAt != nil {
+		response["auto_release_at"] = escrow.AutoReleaseAt.Format(time.RFC3339)
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+// Dispute Handlers
+
+// OpenDispute handles opening a dispute on an escrow
+func (h *Handlers) OpenDispute(c *gin.Context) {
+	logger := h.logger.With(zap.String("handler", "OpenDispute"))
+
+	escrowIDStr := c.Param("id")
+	escrowID, err := uuid.Parse(escrowIDStr)
+	if err != nil {
+		logger.Error("invalid escrow ID", zap.String("escrow_id", escrowIDStr), zap.Error(err))
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "invalid escrow ID",
+			"message": err.Error(),
+		})
+		return
+	}
+
+	var req struct {
+		Reason string `json:"reason" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		logger.Error("invalid request", zap.Error(err))
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "invalid request",
+			"message": err.Error(),
+		})
+		return
+	}
+
+	// Extract user ID from JWT token
+	userID, exists := c.Get("user_id")
+	if !exists {
+		userID = "anonymous"
+	}
+	initiatorID := userID.(string)
+
+	// Open dispute
+	escrowSvc := economic.NewEscrowService(h.db.Conn(), h.logger)
+
+	dispute, err := escrowSvc.OpenDispute(c.Request.Context(), escrowID, initiatorID, req.Reason)
+	if err != nil {
+		logger.Error("failed to open dispute", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "failed to open dispute",
+			"message": err.Error(),
+		})
+		return
+	}
+
+	logger.Info("dispute opened",
+		zap.String("dispute_id", dispute.ID.String()),
+		zap.String("escrow_id", escrowID.String()),
+	)
+
+	c.JSON(http.StatusOK, gin.H{
+		"dispute_id":   dispute.ID.String(),
+		"escrow_id":    dispute.EscrowID.String(),
+		"initiator_id": dispute.InitiatorID,
+		"reason":       dispute.Reason,
+		"status":       string(dispute.Status),
+		"created_at":   dispute.CreatedAt.Format(time.RFC3339),
+	})
+}
+
+// SubmitEvidence handles submitting evidence for a dispute
+func (h *Handlers) SubmitEvidence(c *gin.Context) {
+	logger := h.logger.With(zap.String("handler", "SubmitEvidence"))
+
+	disputeIDStr := c.Param("id")
+	disputeID, err := uuid.Parse(disputeIDStr)
+	if err != nil {
+		logger.Error("invalid dispute ID", zap.String("dispute_id", disputeIDStr), zap.Error(err))
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "invalid dispute ID",
+			"message": err.Error(),
+		})
+		return
+	}
+
+	var req struct {
+		EvidenceType string  `json:"evidence_type" binding:"required"`
+		Content      string  `json:"content" binding:"required"`
+		FileURL      *string `json:"file_url"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		logger.Error("invalid request", zap.Error(err))
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "invalid request",
+			"message": err.Error(),
+		})
+		return
+	}
+
+	// Extract user ID from JWT token
+	userID, exists := c.Get("user_id")
+	if !exists {
+		userID = "anonymous"
+	}
+	submitterID := userID.(string)
+
+	// Submit evidence
+	escrowSvc := economic.NewEscrowService(h.db.Conn(), h.logger)
+
+	evidence, err := escrowSvc.SubmitEvidence(
+		c.Request.Context(),
+		disputeID,
+		submitterID,
+		req.EvidenceType,
+		req.Content,
+		req.FileURL,
+	)
+	if err != nil {
+		logger.Error("failed to submit evidence", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "failed to submit evidence",
+			"message": err.Error(),
+		})
+		return
+	}
+
+	logger.Info("evidence submitted",
+		zap.String("evidence_id", evidence.ID.String()),
+		zap.String("dispute_id", disputeID.String()),
+	)
+
+	response := gin.H{
+		"evidence_id":   evidence.ID.String(),
+		"dispute_id":    evidence.DisputeID.String(),
+		"submitter_id":  evidence.SubmitterID,
+		"evidence_type": evidence.EvidenceType,
+		"content":       evidence.Content,
+		"created_at":    evidence.CreatedAt.Format(time.RFC3339),
+	}
+
+	if evidence.FileURL != nil {
+		response["file_url"] = *evidence.FileURL
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+// ResolveDispute handles resolving a dispute
+func (h *Handlers) ResolveDispute(c *gin.Context) {
+	logger := h.logger.With(zap.String("handler", "ResolveDispute"))
+
+	disputeIDStr := c.Param("id")
+	disputeID, err := uuid.Parse(disputeIDStr)
+	if err != nil {
+		logger.Error("invalid dispute ID", zap.String("dispute_id", disputeIDStr), zap.Error(err))
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "invalid dispute ID",
+			"message": err.Error(),
+		})
+		return
+	}
+
+	var req struct {
+		Resolution string `json:"resolution" binding:"required"`
+		Outcome    string `json:"outcome" binding:"required,oneof=release refund"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		logger.Error("invalid request", zap.Error(err))
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "invalid request",
+			"message": err.Error(),
+		})
+		return
+	}
+
+	// Extract user ID from JWT token (reviewer)
+	userID, exists := c.Get("user_id")
+	if !exists {
+		userID = "system"
+	}
+	reviewerID := userID.(string)
+
+	// Resolve dispute
+	escrowSvc := economic.NewEscrowService(h.db.Conn(), h.logger)
+
+	err = escrowSvc.ResolveDispute(
+		c.Request.Context(),
+		disputeID,
+		reviewerID,
+		req.Resolution,
+		req.Outcome,
+	)
+	if err != nil {
+		logger.Error("failed to resolve dispute", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "failed to resolve dispute",
+			"message": err.Error(),
+		})
+		return
+	}
+
+	logger.Info("dispute resolved",
+		zap.String("dispute_id", disputeID.String()),
+		zap.String("reviewer_id", reviewerID),
+		zap.String("outcome", req.Outcome),
+	)
+
+	c.JSON(http.StatusOK, gin.H{
+		"dispute_id": disputeID.String(),
+		"status":     "resolved",
+		"outcome":    req.Outcome,
+		"resolution": req.Resolution,
+		"message":    "dispute successfully resolved",
+	})
+}
+
+// GetDispute retrieves dispute details with evidence
+func (h *Handlers) GetDispute(c *gin.Context) {
+	logger := h.logger.With(zap.String("handler", "GetDispute"))
+
+	disputeIDStr := c.Param("id")
+	disputeID, err := uuid.Parse(disputeIDStr)
+	if err != nil {
+		logger.Error("invalid dispute ID", zap.String("dispute_id", disputeIDStr), zap.Error(err))
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "invalid dispute ID",
+			"message": err.Error(),
+		})
+		return
+	}
+
+	// Get dispute
+	escrowSvc := economic.NewEscrowService(h.db.Conn(), h.logger)
+
+	dispute, err := escrowSvc.GetDispute(c.Request.Context(), disputeID)
+	if err != nil {
+		logger.Error("failed to get dispute", zap.Error(err))
+		c.JSON(http.StatusNotFound, gin.H{
+			"error":   "dispute not found",
+			"message": err.Error(),
+		})
+		return
+	}
+
+	// Get evidence
+	evidence, err := escrowSvc.GetDisputeEvidence(c.Request.Context(), disputeID)
+	if err != nil {
+		logger.Error("failed to get evidence", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "failed to get evidence",
+			"message": err.Error(),
+		})
+		return
+	}
+
+	response := gin.H{
+		"dispute_id":   dispute.ID.String(),
+		"escrow_id":    dispute.EscrowID.String(),
+		"initiator_id": dispute.InitiatorID,
+		"reason":       dispute.Reason,
+		"status":       string(dispute.Status),
+		"created_at":   dispute.CreatedAt.Format(time.RFC3339),
+		"updated_at":   dispute.UpdatedAt.Format(time.RFC3339),
+		"evidence":     evidence,
+	}
+
+	if dispute.ReviewerID != nil {
+		response["reviewer_id"] = *dispute.ReviewerID
+	}
+	if dispute.Resolution != nil {
+		response["resolution"] = *dispute.Resolution
+	}
+	if dispute.ResolvedAt != nil {
+		response["resolved_at"] = dispute.ResolvedAt.Format(time.RFC3339)
+	}
+
+	c.JSON(http.StatusOK, response)
+}

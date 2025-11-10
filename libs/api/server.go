@@ -261,7 +261,7 @@ func (s *Server) setupRoutes() {
 				deployments.POST("/:id/stop", s.handlers.StopDeployment)
 			}
 
-			// Economic features - auctions, payment channels, reputation, meta-orchestrator
+			// Economic features - auctions, payment channels, reputation, meta-orchestrator, escrow, disputes
 			economic := protected.Group("/economic")
 			{
 				// Auction management
@@ -279,6 +279,19 @@ func (s *Server) setupRoutes() {
 				// Meta-orchestrator
 				economic.POST("/meta-orchestrator/delegate", s.handlers.DelegateToMetaOrchestrator)
 				economic.GET("/meta-orchestrator/status/:task_id", s.handlers.GetOrchestrationStatus)
+
+				// Escrow management
+				economic.POST("/escrows", s.handlers.CreateEscrow)
+				economic.GET("/escrows/:id", s.handlers.GetEscrow)
+				economic.POST("/escrows/:id/fund", s.handlers.FundEscrow)
+				economic.POST("/escrows/:id/release", s.handlers.ReleaseEscrow)
+				economic.POST("/escrows/:id/refund", s.handlers.RefundEscrow)
+
+				// Dispute resolution
+				economic.POST("/escrows/:id/dispute", s.handlers.OpenDispute)
+				economic.GET("/disputes/:id", s.handlers.GetDispute)
+				economic.POST("/disputes/:id/evidence", s.handlers.SubmitEvidence)
+				economic.POST("/disputes/:id/resolve", s.handlers.ResolveDispute)
 			}
 		}
 	}
