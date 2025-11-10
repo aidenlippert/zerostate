@@ -372,30 +372,66 @@ func (h *Handlers) DelegateToMetaOrchestrator(c *gin.Context) {
 		return
 	}
 
-	// TODO: Implement real meta-orchestrator logic
-	// For now, return mock data indicating delegated status
-	delegationID := uuid.New().String()
-	createdAt := time.Now()
+	// Get user ID from JWT token (if available, otherwise use "anonymous")
+	userID := "anonymous"
+	if userIDValue, exists := c.Get("user_id"); exists {
+		if uid, ok := userIDValue.(string); ok {
+			userID = uid
+		}
+	}
+
+	// Set default priority if not provided
+	if req.Priority == "" {
+		req.Priority = "normal"
+	}
+
+	// Create delegation using real meta-orchestrator service
+	metaSvc := economic.NewMetaOrchestratorService(h.db, h.logger)
+	delegation, subtasks, err := metaSvc.CreateDelegation(
+		c.Request.Context(),
+		req.TaskID,
+		userID,
+		req.Query,
+		req.Capabilities,
+		req.Budget,
+		req.Priority,
+	)
+	if err != nil {
+		logger.Error("failed to create delegation",
+			zap.String("task_id", req.TaskID),
+			zap.Error(err),
+		)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "failed to create delegation",
+			"message": err.Error(),
+		})
+		return
+	}
+
+	// Convert subtasks to simple descriptions for response
+	subtaskDescriptions := make([]string, len(subtasks))
+	for i, st := range subtasks {
+		subtaskDescriptions[i] = st.Description
+	}
 
 	logger.Info("task delegated to meta-orchestrator",
-		zap.String("delegation_id", delegationID),
+		zap.String("delegation_id", delegation.ID.String()),
 		zap.String("task_id", req.TaskID),
-		zap.String("query", req.Query),
-		zap.Float64("budget", req.Budget),
+		zap.Int("subtasks", len(subtasks)),
 	)
 
 	c.JSON(http.StatusCreated, gin.H{
-		"delegation_id": delegationID,
-		"task_id":       req.TaskID,
-		"query":         req.Query,
-		"status":        "delegated",
-		"capabilities":  req.Capabilities,
-		"budget":        req.Budget,
-		"priority":      req.Priority,
-		"agents_count":  0,
-		"subtasks":      []string{},
-		"created_at":    createdAt.Format(time.RFC3339),
-		"estimated_completion": time.Now().Add(5 * time.Minute).Format(time.RFC3339),
+		"delegation_id":        delegation.ID.String(),
+		"task_id":              delegation.TaskID,
+		"query":                delegation.Query,
+		"status":               string(delegation.Status),
+		"capabilities":         delegation.Capabilities,
+		"budget":               delegation.Budget,
+		"priority":             delegation.Priority,
+		"agents_count":         delegation.AgentsCount,
+		"subtasks":             subtaskDescriptions,
+		"created_at":           delegation.CreatedAt.Format(time.RFC3339),
+		"estimated_completion": delegation.EstimatedCompletion.Format(time.RFC3339),
 	})
 }
 
@@ -404,20 +440,73 @@ func (h *Handlers) GetOrchestrationStatus(c *gin.Context) {
 	logger := h.logger.With(zap.String("handler", "GetOrchestrationStatus"))
 	taskID := c.Param("task_id")
 
-	// TODO: Implement real meta-orchestrator status retrieval
-	// For now, return mock status data
-	logger.Info("orchestration status requested",
+	// Get delegation and subtasks using real meta-orchestrator service
+	metaSvc := economic.NewMetaOrchestratorService(h.db, h.logger)
+
+	delegation, err := metaSvc.GetDelegationByTaskID(c.Request.Context(), taskID)
+	if err != nil {
+		logger.Error("delegation not found",
+			zap.String("task_id", taskID),
+			zap.Error(err),
+		)
+		c.JSON(http.StatusNotFound, gin.H{
+			"error":   "delegation not found",
+			"message": err.Error(),
+		})
+		return
+	}
+
+	// Get subtasks for this delegation
+	subtasks, err := metaSvc.GetSubtasks(c.Request.Context(), delegation.ID)
+	if err != nil {
+		logger.Error("failed to get subtasks",
+			zap.String("delegation_id", delegation.ID.String()),
+			zap.Error(err),
+		)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "failed to get subtasks",
+			"message": err.Error(),
+		})
+		return
+	}
+
+	// Calculate progress
+	completedCount := 0
+	assignedAgents := make(map[string]bool)
+	for _, st := range subtasks {
+		if st.Status == economic.SubtaskStatusCompleted {
+			completedCount++
+		}
+		if st.AgentID != nil {
+			assignedAgents[*st.AgentID] = true
+		}
+	}
+
+	agentList := make([]string, 0, len(assignedAgents))
+	for agentID := range assignedAgents {
+		agentList = append(agentList, agentID)
+	}
+
+	progressPercentage := 0.0
+	if len(subtasks) > 0 {
+		progressPercentage = (float64(completedCount) / float64(len(subtasks))) * 100.0
+	}
+
+	logger.Info("orchestration status retrieved",
 		zap.String("task_id", taskID),
+		zap.String("status", string(delegation.Status)),
+		zap.Float64("progress", progressPercentage),
 	)
 
 	c.JSON(http.StatusOK, gin.H{
-		"task_id":              taskID,
-		"status":               "in_progress",
-		"agents_assigned":      []string{"agent_001", "agent_002"},
-		"subtasks_completed":   1,
-		"subtasks_total":       3,
-		"progress_percentage":  33.33,
-		"estimated_completion": time.Now().Add(3 * time.Minute).Format(time.RFC3339),
-		"last_updated":         time.Now().Format(time.RFC3339),
+		"delegation_id":        delegation.ID.String(),
+		"task_id":              delegation.TaskID,
+		"status":               string(delegation.Status),
+		"agents_assigned":      agentList,
+		"subtasks_completed":   completedCount,
+		"subtasks_total":       len(subtasks),
+		"progress_percentage":  progressPercentage,
+		"estimated_completion": delegation.EstimatedCompletion.Format(time.RFC3339),
+		"last_updated":         delegation.UpdatedAt.Format(time.RFC3339),
 	})
 }
