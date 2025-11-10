@@ -386,7 +386,7 @@ func (h *Handlers) DelegateToMetaOrchestrator(c *gin.Context) {
 	}
 
 	// Create delegation using real meta-orchestrator service
-	metaSvc := economic.NewMetaOrchestratorService(h.db, h.logger)
+	metaSvc := economic.NewMetaOrchestratorService(h.db.Conn(), h.logger)
 	delegation, subtasks, err := metaSvc.CreateDelegation(
 		c.Request.Context(),
 		req.TaskID,
@@ -441,7 +441,7 @@ func (h *Handlers) GetOrchestrationStatus(c *gin.Context) {
 	taskID := c.Param("task_id")
 
 	// Get delegation and subtasks using real meta-orchestrator service
-	metaSvc := economic.NewMetaOrchestratorService(h.db, h.logger)
+	metaSvc := economic.NewMetaOrchestratorService(h.db.Conn(), h.logger)
 
 	delegation, err := metaSvc.GetDelegationByTaskID(c.Request.Context(), taskID)
 	if err != nil {
