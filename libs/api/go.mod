@@ -20,6 +20,7 @@ require (
 require (
 	github.com/aidenlippert/zerostate/libs/auth v0.0.0
 	github.com/aidenlippert/zerostate/libs/database v0.0.0
+	github.com/aidenlippert/zerostate/libs/economic v0.0.0
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bytedance/sonic v1.11.6 // indirect
 	github.com/bytedance/sonic/loader v0.1.1 // indirect
@@ -85,3 +86,5 @@ replace (
 replace github.com/aidenlippert/zerostate/libs/auth => ../auth
 
 replace github.com/aidenlippert/zerostate/libs/database => ../database
+
+replace github.com/aidenlippert/zerostate/libs/economic => ../economic

@@ -3,12 +3,16 @@ module github.com/aidenlippert/zerostate/libs/economic
 go 1.23
 
 require (
-github.com/prometheus/client_golang v1.23.2
-github.com/stretchr/testify v1.11.1
-github.com/aidenlippert/zerostate/libs/metrics v0.0.0
+	github.com/prometheus/client_golang v1.23.2
+	github.com/stretchr/testify v1.11.1
+	github.com/aidenlippert/zerostate/libs/metrics v0.0.0
+	github.com/aidenlippert/zerostate/libs/database v0.0.0
+	github.com/google/uuid v1.6.0
 )
 
 replace github.com/aidenlippert/zerostate/libs/metrics => ../metrics
+
+replace github.com/aidenlippert/zerostate/libs/database => ../database
 
 require (
 github.com/beorn7/perks v1.0.1 // indirect
