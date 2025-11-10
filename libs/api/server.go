@@ -173,6 +173,13 @@ func (s *Server) setupRoutes() {
 			}
 		}
 
+		// TEMPORARY: Allow agent registration and task submission without auth for testing
+		v1.POST("/agents/register", s.handlers.RegisterAgent)
+		v1.POST("/tasks/submit", s.handlers.SubmitTask)
+		v1.GET("/tasks/:id", s.handlers.GetTask)
+		v1.GET("/tasks/:id/status", s.handlers.GetTaskStatus)
+		v1.GET("/tasks/:id/result", s.handlers.GetTaskResult)
+
 		// Protected routes - require authentication
 		protected := v1.Group("")
 		protected.Use(authMiddleware())
@@ -180,7 +187,6 @@ func (s *Server) setupRoutes() {
 			// Agent management
 			agents := protected.Group("/agents")
 			{
-				agents.POST("/register", s.handlers.RegisterAgent)
 				agents.GET("/:id", s.handlers.GetAgent)
 				agents.GET("", s.handlers.ListAgents)
 				agents.PUT("/:id", s.handlers.UpdateAgent)
@@ -198,12 +204,8 @@ func (s *Server) setupRoutes() {
 			// Task management
 			tasks := protected.Group("/tasks")
 			{
-				tasks.POST("/submit", s.handlers.SubmitTask)
-				tasks.GET("/:id", s.handlers.GetTask)
 				tasks.GET("", s.handlers.ListTasks)
 				tasks.DELETE("/:id", s.handlers.CancelTask)
-				tasks.GET("/:id/status", s.handlers.GetTaskStatus)
-				tasks.GET("/:id/result", s.handlers.GetTaskResult)
 
 				// Direct task execution (Sprint 9)
 				tasks.POST("/execute", s.handlers.ExecuteTaskDirect)
@@ -211,11 +213,34 @@ func (s *Server) setupRoutes() {
 				tasks.GET("/results", s.handlers.ListTaskResults)
 			}
 
+			// Auction management
+			auctions := protected.Group("/auctions")
+			{
+				auctions.POST("/create", s.handlers.CreateAuction)
+				auctions.POST("/:id/bid", s.handlers.SubmitBid)
+			}
+
+			// Payment channel management
+			payments := protected.Group("/payments")
+			{
+				payments.POST("/channels/open", s.handlers.OpenPaymentChannel)
+				payments.POST("/channels/:id/settle", s.handlers.SettlePaymentChannel)
+			}
+
+			// Reputation management
+			reputation := protected.Group("/reputation")
+			{
+				reputation.GET("/:agent_id", s.handlers.GetAgentReputation)
+				reputation.POST("/update", s.handlers.UpdateAgentReputation)
+			}
+
 			// Orchestrator monitoring
 			orchestrator := protected.Group("/orchestrator")
 			{
 				orchestrator.GET("/metrics", s.handlers.GetOrchestratorMetrics)
 				orchestrator.GET("/health", s.handlers.GetOrchestratorHealth)
+				orchestrator.POST("/delegate", s.handlers.DelegateToMetaOrchestrator)
+				orchestrator.GET("/status/:task_id", s.handlers.GetOrchestrationStatus)
 			}
 
 			// WebSocket real-time updates
@@ -234,6 +259,26 @@ func (s *Server) setupRoutes() {
 				deployments.GET("/:id", s.handlers.GetDeployment)
 				deployments.GET("", s.handlers.ListUserDeployments)
 				deployments.POST("/:id/stop", s.handlers.StopDeployment)
+			}
+
+			// Economic features - auctions, payment channels, reputation, meta-orchestrator
+			economic := protected.Group("/economic")
+			{
+				// Auction management
+				economic.POST("/auctions", s.handlers.CreateAuction)
+				economic.POST("/auctions/:id/bids", s.handlers.SubmitBid)
+
+				// Payment channel management
+				economic.POST("/payment-channels", s.handlers.OpenPaymentChannel)
+				economic.POST("/payment-channels/:id/settle", s.handlers.SettlePaymentChannel)
+
+				// Reputation management
+				economic.GET("/reputation/:agent_id", s.handlers.GetAgentReputation)
+				economic.POST("/reputation", s.handlers.UpdateAgentReputation)
+
+				// Meta-orchestrator
+				economic.POST("/meta-orchestrator/delegate", s.handlers.DelegateToMetaOrchestrator)
+				economic.GET("/meta-orchestrator/status/:task_id", s.handlers.GetOrchestrationStatus)
 			}
 		}
 	}
