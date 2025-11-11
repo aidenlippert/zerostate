@@ -118,7 +118,7 @@ func (n *Node) sendMessageWithTracing(ctx context.Context, peerID, msgType strin
 	defer span.End()
 
 	// Inject trace context into message headers
-	traceContext := telemetry.InjectTraceContext(ctx)
+	_ = telemetry.InjectTraceContext(ctx)
 
 	// Create message with trace context
 	// message := &Message{
@@ -205,13 +205,13 @@ func (n *Node) publishGossipWithTracing(ctx context.Context, topic string, data 
 	start := time.Now()
 
 	// Inject trace context for propagation
-	traceContext := telemetry.InjectTraceContext(ctx)
+	_ = telemetry.InjectTraceContext(ctx)
 
 	// Publish with trace context
 	// message := &GossipMessage{
 	//     Topic:        topic,
 	//     Data:         data,
-	//     TraceContext: traceContext,
+	//     TraceContext: (unused),
 	// }
 	// err := n.gossip.Publish(ctx, message)
 	var err error = nil // placeholder

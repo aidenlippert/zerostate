@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 	"github.com/aidenlippert/zerostate/libs/identity"
 	"github.com/aidenlippert/zerostate/libs/search"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
@@ -49,7 +51,40 @@ func (h *Handlers) RegisterAgent(c *gin.Context) {
 		return
 	}
 
-	// Get WASM binary file
+	// Parse JSON metadata BEFORE reading large file to avoid FormValue() issues
+	var req RegisterAgentRequest
+	agentJSON := c.Request.FormValue("agent")
+	if agentJSON == "" {
+		logger.Error("missing agent JSON field")
+		if span != nil {
+			span.SetStatus(codes.Error, "missing agent field")
+		}
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "invalid request",
+			"message": "agent field with JSON data is required",
+		})
+		return
+	}
+
+	if err := json.Unmarshal([]byte(agentJSON), &req); err != nil {
+		logger.Error("failed to parse agent JSON", zap.Error(err))
+		if span != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "invalid JSON data")
+		}
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "invalid request",
+			"message": fmt.Sprintf("failed to parse agent JSON: %v", err),
+		})
+		return
+	}
+
+	logger.Info("agent metadata parsed successfully",
+		zap.String("name", req.Name),
+		zap.Strings("capabilities", req.Capabilities),
+	)
+
+	// Now get WASM binary file
 	file, header, err := c.Request.FormFile("wasm_binary")
 	if err != nil {
 		logger.Error("failed to get WASM binary", zap.Error(err))
@@ -130,22 +165,7 @@ func (h *Handlers) RegisterAgent(c *gin.Context) {
 		zap.Int64("size", header.Size),
 	)
 
-	// Parse JSON request data
-	var req RegisterAgentRequest
-	if err := c.ShouldBind(&req); err != nil {
-		logger.Error("failed to parse request", zap.Error(err))
-		if span != nil {
-			span.RecordError(err)
-			span.SetStatus(codes.Error, "invalid request data")
-		}
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "invalid request",
-			"message": err.Error(),
-		})
-		return
-	}
-
-	// Validate capabilities
+	// Validate capabilities (req already parsed earlier)
 	if len(req.Capabilities) == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":   "invalid request",
@@ -219,6 +239,98 @@ func (h *Handlers) RegisterAgent(c *gin.Context) {
 		} else {
 			logger.Error("failed to update HNSW index")
 		}
+	}
+
+	// Save agent to database
+	if h.db != nil {
+		// Convert capabilities to JSON
+		capabilitiesJSON, err := json.Marshal(req.Capabilities)
+		if err != nil {
+			logger.Error("failed to marshal capabilities", zap.Error(err))
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":   "internal error",
+				"message": "failed to process capabilities",
+			})
+			return
+		}
+		// Ensure capabilities is never null for PostgreSQL JSONB column (must be [] not null)
+		if len(capabilitiesJSON) == 0 || string(capabilitiesJSON) == "null" {
+			capabilitiesJSON = json.RawMessage(`[]`)
+		}
+
+		// Convert pricing to JSON for PricingModel field
+		pricingJSON, err := json.Marshal(req.Pricing)
+		if err != nil {
+			logger.Error("failed to marshal pricing", zap.Error(err))
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":   "internal error",
+				"message": "failed to process pricing",
+			})
+			return
+		}
+
+		// Create metadata with binary hash
+		metadata := map[string]interface{}{
+			"wasm_hash": wasmHash,
+		}
+		metadataJSON, err := json.Marshal(metadata)
+		if err != nil {
+			logger.Error("failed to marshal metadata", zap.Error(err))
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":   "internal error",
+				"message": "failed to process metadata",
+			})
+			return
+		}
+		// Ensure metadata is never nil
+		if len(metadataJSON) == 0 {
+			metadataJSON = json.RawMessage(`{}`)
+		}
+
+		// Create agent record
+		agentUUID := uuid.New()
+		now := time.Now()
+		agent := &database.Agent{
+			ID:           agentUUID,
+			DID:          h.signer.DID(),
+			Name:         req.Name,
+			Description:  sql.NullString{String: req.Description, Valid: req.Description != ""},
+			Capabilities: json.RawMessage(capabilitiesJSON),
+			PricingModel: sql.NullString{String: string(pricingJSON), Valid: true},
+			Status:       database.AgentStatusOnline, // Agent is online and available
+			MaxCapacity:  10,                             // Default capacity
+			CurrentLoad:  0,
+			CreatedAt:    now,
+			UpdatedAt:    now,
+			Metadata:     json.RawMessage(metadataJSON),
+		}
+
+		logger.Info("attempting to save agent to database",
+			zap.String("agent_id", agentUUID.String()),
+			zap.String("did", h.signer.DID()),
+			zap.String("name", req.Name),
+			zap.String("status", string(agent.Status)),
+			zap.Int("capabilities_len", len(capabilitiesJSON)),
+			zap.Int("metadata_len", len(metadataJSON)),
+		)
+
+		if err := h.db.CreateAgent(agent); err != nil {
+			logger.Error("failed to save agent to database",
+				zap.Error(err),
+				zap.String("error_type", fmt.Sprintf("%T", err)),
+				zap.String("error_detail", err.Error()),
+			)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":   "internal error",
+				"message": "failed to save agent",
+			})
+			return
+		}
+
+		logger.Info("agent saved to database",
+			zap.String("agent_id", h.signer.DID()),
+			zap.String("db_id", agentUUID.String()),
+		)
 	}
 
 	// TODO: Store WASM binary (IPFS, S3, or local storage)
@@ -365,17 +477,22 @@ func (h *Handlers) seedAgentsIfEmpty() error {
 			createdAt = time.Now()
 		}
 
+		// Convert string ID to uuid.UUID
+		agentID, _ := uuid.Parse(mockAgent["id"].(string))
+
 		agent := &database.Agent{
-			ID:             mockAgent["id"].(string),
+			ID:             agentID,
+			DID:            mockAgent["id"].(string),
 			Name:           mockAgent["name"].(string),
-			Description:    mockAgent["description"].(string),
-			Capabilities:   string(capabilities),
-			Status:         mockAgent["status"].(string),
+			Description:    sql.NullString{String: mockAgent["description"].(string), Valid: true},
+			Capabilities:   json.RawMessage(capabilities),
+			Status:         database.AgentStatus(mockAgent["status"].(string)),
 			Price:          mockAgent["price"].(float64),
-			TasksCompleted: int64(mockAgent["tasks_completed"].(int)),
+			TasksCompleted: mockAgent["tasks_completed"].(int),
 			Rating:         mockAgent["rating"].(float64),
 			CreatedAt:      createdAt,
 			UpdatedAt:      time.Now(),
+			Metadata:       json.RawMessage(`{}`),
 		}
 
 		if err := h.db.CreateAgent(agent); err != nil {
@@ -390,169 +507,169 @@ func (h *Handlers) seedAgentsIfEmpty() error {
 func (h *Handlers) getMockAgents() []gin.H {
 	return []gin.H{
 		{
-			"id":          "agent_001",
-			"name":        "DataWeaver",
-			"description": "Advanced data analysis agent for ETL processing and database management",
-			"capabilities": []string{"data_analysis", "etl", "database"},
-			"status":      "active",
-			"price":       0.02,
+			"id":              "agent_001",
+			"name":            "DataWeaver",
+			"description":     "Advanced data analysis agent for ETL processing and database management",
+			"capabilities":    []string{"data_analysis", "etl", "database"},
+			"status":          "active",
+			"price":           0.02,
 			"tasks_completed": 1200000,
-			"rating":      4.9,
-			"created_at":  time.Now().Add(-30 * 24 * time.Hour).Format(time.RFC3339),
+			"rating":          4.9,
+			"created_at":      time.Now().Add(-30 * 24 * time.Hour).Format(time.RFC3339),
 		},
 		{
-			"id":          "agent_002",
-			"name":        "Synth-Net",
-			"description": "API integration and data synchronization specialist",
-			"capabilities": []string{"api", "sync", "integration"},
-			"status":      "active",
-			"price":       0.05,
+			"id":              "agent_002",
+			"name":            "Synth-Net",
+			"description":     "API integration and data synchronization specialist",
+			"capabilities":    []string{"api", "sync", "integration"},
+			"status":          "active",
+			"price":           0.05,
 			"tasks_completed": 890000,
-			"rating":      4.8,
-			"created_at":  time.Now().Add(-20 * 24 * time.Hour).Format(time.RFC3339),
+			"rating":          4.8,
+			"created_at":      time.Now().Add(-20 * 24 * time.Hour).Format(time.RFC3339),
 		},
 		{
-			"id":          "agent_003",
-			"name":        "Code-Gen X",
-			"description": "Automated code generation and refactoring assistant",
-			"capabilities": []string{"code_gen", "refactor", "testing"},
-			"status":      "active",
-			"price":       25.00,
+			"id":              "agent_003",
+			"name":            "Code-Gen X",
+			"description":     "Automated code generation and refactoring assistant",
+			"capabilities":    []string{"code_gen", "refactor", "testing"},
+			"status":          "active",
+			"price":           25.00,
 			"tasks_completed": 450000,
-			"rating":      4.7,
-			"created_at":  time.Now().Add(-15 * 24 * time.Hour).Format(time.RFC3339),
+			"rating":          4.7,
+			"created_at":      time.Now().Add(-15 * 24 * time.Hour).Format(time.RFC3339),
 		},
 		{
-			"id":          "agent_004",
-			"name":        "Orchestrator Prime",
-			"description": "Meta-orchestration agent for complex multi-agent workflows",
-			"capabilities": []string{"orchestration", "workflow", "coordination"},
-			"status":      "active",
-			"price":       0.10,
+			"id":              "agent_004",
+			"name":            "Orchestrator Prime",
+			"description":     "Meta-orchestration agent for complex multi-agent workflows",
+			"capabilities":    []string{"orchestration", "workflow", "coordination"},
+			"status":          "active",
+			"price":           0.10,
 			"tasks_completed": 2100000,
-			"rating":      4.9,
-			"created_at":  time.Now().Add(-45 * 24 * time.Hour).Format(time.RFC3339),
+			"rating":          4.9,
+			"created_at":      time.Now().Add(-45 * 24 * time.Hour).Format(time.RFC3339),
 		},
 		{
-			"id":          "agent_005",
-			"name":        "Sentinel",
-			"description": "Security monitoring and threat detection specialist",
-			"capabilities": []string{"security", "monitoring", "threat_detection"},
-			"status":      "active",
-			"price":       50.00,
+			"id":              "agent_005",
+			"name":            "Sentinel",
+			"description":     "Security monitoring and threat detection specialist",
+			"capabilities":    []string{"security", "monitoring", "threat_detection"},
+			"status":          "active",
+			"price":           50.00,
 			"tasks_completed": 720000,
-			"rating":      4.6,
-			"created_at":  time.Now().Add(-25 * 24 * time.Hour).Format(time.RFC3339),
+			"rating":          4.6,
+			"created_at":      time.Now().Add(-25 * 24 * time.Hour).Format(time.RFC3339),
 		},
 		{
-			"id":          "agent_006",
-			"name":        "Canvas AI",
-			"description": "Image generation and manipulation specialist using DALL-E",
-			"capabilities": []string{"image_gen", "design", "creative"},
-			"status":      "active",
-			"price":       0.25,
+			"id":              "agent_006",
+			"name":            "Canvas AI",
+			"description":     "Image generation and manipulation specialist using DALL-E",
+			"capabilities":    []string{"image_gen", "design", "creative"},
+			"status":          "active",
+			"price":           0.25,
 			"tasks_completed": 950000,
-			"rating":      4.8,
-			"created_at":  time.Now().Add(-18 * 24 * time.Hour).Format(time.RFC3339),
+			"rating":          4.8,
+			"created_at":      time.Now().Add(-18 * 24 * time.Hour).Format(time.RFC3339),
 		},
 		{
-			"id":          "agent_007",
-			"name":        "TextCraft Pro",
-			"description": "NLP and content generation specialist powered by GPT-4",
-			"capabilities": []string{"nlp", "text_gen", "summarization"},
-			"status":      "active",
-			"price":       0.03,
+			"id":              "agent_007",
+			"name":            "TextCraft Pro",
+			"description":     "NLP and content generation specialist powered by GPT-4",
+			"capabilities":    []string{"nlp", "text_gen", "summarization"},
+			"status":          "active",
+			"price":           0.03,
 			"tasks_completed": 1800000,
-			"rating":      4.7,
-			"created_at":  time.Now().Add(-35 * 24 * time.Hour).Format(time.RFC3339),
+			"rating":          4.7,
+			"created_at":      time.Now().Add(-35 * 24 * time.Hour).Format(time.RFC3339),
 		},
 		{
-			"id":          "agent_008",
-			"name":        "VoiceForge",
-			"description": "Speech synthesis and voice cloning agent",
-			"capabilities": []string{"tts", "voice_clone", "audio"},
-			"status":      "active",
-			"price":       0.15,
+			"id":              "agent_008",
+			"name":            "VoiceForge",
+			"description":     "Speech synthesis and voice cloning agent",
+			"capabilities":    []string{"tts", "voice_clone", "audio"},
+			"status":          "active",
+			"price":           0.15,
 			"tasks_completed": 580000,
-			"rating":      4.5,
-			"created_at":  time.Now().Add(-12 * 24 * time.Hour).Format(time.RFC3339),
+			"rating":          4.5,
+			"created_at":      time.Now().Add(-12 * 24 * time.Hour).Format(time.RFC3339),
 		},
 		{
-			"id":          "agent_009",
-			"name":        "VideoMorph",
-			"description": "Video processing and editing automation specialist",
-			"capabilities": []string{"video_processing", "editing", "encoding"},
-			"status":      "active",
-			"price":       0.50,
+			"id":              "agent_009",
+			"name":            "VideoMorph",
+			"description":     "Video processing and editing automation specialist",
+			"capabilities":    []string{"video_processing", "editing", "encoding"},
+			"status":          "active",
+			"price":           0.50,
 			"tasks_completed": 320000,
-			"rating":      4.6,
-			"created_at":  time.Now().Add(-22 * 24 * time.Hour).Format(time.RFC3339),
+			"rating":          4.6,
+			"created_at":      time.Now().Add(-22 * 24 * time.Hour).Format(time.RFC3339),
 		},
 		{
-			"id":          "agent_010",
-			"name":        "WebCrawler Elite",
-			"description": "Advanced web scraping and data extraction agent",
-			"capabilities": []string{"web_scraping", "data_extraction", "crawling"},
-			"status":      "active",
-			"price":       0.08,
+			"id":              "agent_010",
+			"name":            "WebCrawler Elite",
+			"description":     "Advanced web scraping and data extraction agent",
+			"capabilities":    []string{"web_scraping", "data_extraction", "crawling"},
+			"status":          "active",
+			"price":           0.08,
 			"tasks_completed": 1100000,
-			"rating":      4.7,
-			"created_at":  time.Now().Add(-28 * 24 * time.Hour).Format(time.RFC3339),
+			"rating":          4.7,
+			"created_at":      time.Now().Add(-28 * 24 * time.Hour).Format(time.RFC3339),
 		},
 		{
-			"id":          "agent_011",
-			"name":        "ML Trainer",
-			"description": "Machine learning model training and optimization specialist",
-			"capabilities": []string{"ml_training", "optimization", "model_tuning"},
-			"status":      "active",
-			"price":       100.00,
+			"id":              "agent_011",
+			"name":            "ML Trainer",
+			"description":     "Machine learning model training and optimization specialist",
+			"capabilities":    []string{"ml_training", "optimization", "model_tuning"},
+			"status":          "active",
+			"price":           100.00,
 			"tasks_completed": 180000,
-			"rating":      4.8,
-			"created_at":  time.Now().Add(-40 * 24 * time.Hour).Format(time.RFC3339),
+			"rating":          4.8,
+			"created_at":      time.Now().Add(-40 * 24 * time.Hour).Format(time.RFC3339),
 		},
 		{
-			"id":          "agent_012",
-			"name":        "CloudSync Master",
-			"description": "Multi-cloud storage synchronization and backup agent",
-			"capabilities": []string{"cloud_storage", "backup", "sync"},
-			"status":      "active",
-			"price":       0.01,
+			"id":              "agent_012",
+			"name":            "CloudSync Master",
+			"description":     "Multi-cloud storage synchronization and backup agent",
+			"capabilities":    []string{"cloud_storage", "backup", "sync"},
+			"status":          "active",
+			"price":           0.01,
 			"tasks_completed": 2500000,
-			"rating":      4.9,
-			"created_at":  time.Now().Add(-50 * 24 * time.Hour).Format(time.RFC3339),
+			"rating":          4.9,
+			"created_at":      time.Now().Add(-50 * 24 * time.Hour).Format(time.RFC3339),
 		},
 		{
-			"id":          "agent_013",
-			"name":        "BlockChain Oracle",
-			"description": "Blockchain interaction and smart contract deployment agent",
-			"capabilities": []string{"blockchain", "smart_contracts", "web3"},
-			"status":      "active",
-			"price":       0.20,
+			"id":              "agent_013",
+			"name":            "BlockChain Oracle",
+			"description":     "Blockchain interaction and smart contract deployment agent",
+			"capabilities":    []string{"blockchain", "smart_contracts", "web3"},
+			"status":          "active",
+			"price":           0.20,
 			"tasks_completed": 420000,
-			"rating":      4.4,
-			"created_at":  time.Now().Add(-10 * 24 * time.Hour).Format(time.RFC3339),
+			"rating":          4.4,
+			"created_at":      time.Now().Add(-10 * 24 * time.Hour).Format(time.RFC3339),
 		},
 		{
-			"id":          "agent_014",
-			"name":        "Quantum Simulator",
-			"description": "Quantum algorithm simulation and optimization",
-			"capabilities": []string{"quantum", "simulation", "optimization"},
-			"status":      "beta",
-			"price":       5.00,
+			"id":              "agent_014",
+			"name":            "Quantum Simulator",
+			"description":     "Quantum algorithm simulation and optimization",
+			"capabilities":    []string{"quantum", "simulation", "optimization"},
+			"status":          "beta",
+			"price":           5.00,
 			"tasks_completed": 85000,
-			"rating":      4.2,
-			"created_at":  time.Now().Add(-5 * 24 * time.Hour).Format(time.RFC3339),
+			"rating":          4.2,
+			"created_at":      time.Now().Add(-5 * 24 * time.Hour).Format(time.RFC3339),
 		},
 		{
-			"id":          "agent_015",
-			"name":        "DevOps Automator",
-			"description": "CI/CD pipeline automation and infrastructure as code specialist",
-			"capabilities": []string{"devops", "ci_cd", "infrastructure"},
-			"status":      "active",
-			"price":       0.12,
+			"id":              "agent_015",
+			"name":            "DevOps Automator",
+			"description":     "CI/CD pipeline automation and infrastructure as code specialist",
+			"capabilities":    []string{"devops", "ci_cd", "infrastructure"},
+			"status":          "active",
+			"price":           0.12,
 			"tasks_completed": 980000,
-			"rating":      4.8,
-			"created_at":  time.Now().Add(-32 * 24 * time.Hour).Format(time.RFC3339),
+			"rating":          4.8,
+			"created_at":      time.Now().Add(-32 * 24 * time.Hour).Format(time.RFC3339),
 		},
 	}
 }
@@ -620,8 +737,8 @@ func (h *Handlers) UpdateAgent(c *gin.Context) {
 
 	// TODO: Update agent
 	c.JSON(http.StatusNotImplemented, gin.H{
-		"error":   "not implemented",
-		"message": "UpdateAgent endpoint not yet implemented",
+		"error":    "not implemented",
+		"message":  "UpdateAgent endpoint not yet implemented",
 		"agent_id": agentID,
 	})
 }
@@ -632,8 +749,8 @@ func (h *Handlers) DeleteAgent(c *gin.Context) {
 
 	// TODO: Delete agent
 	c.JSON(http.StatusNotImplemented, gin.H{
-		"error":   "not implemented",
-		"message": "DeleteAgent endpoint not yet implemented",
+		"error":    "not implemented",
+		"message":  "DeleteAgent endpoint not yet implemented",
 		"agent_id": agentID,
 	})
 }
@@ -770,7 +887,7 @@ type RegisterAgentResponse struct {
 const (
 	// Maximum WASM binary sizes
 	MaxWASMSize     = 50 * 1024 * 1024 // 50MB
-	MinWASMSize     = 1024              // 1KB
+	MinWASMSize     = 1024             // 1KB
 	MaxCapabilities = 50
 	MaxMetadataSize = 10 * 1024 // 10KB JSON
 )

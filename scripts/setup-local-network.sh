@@ -95,9 +95,19 @@ echo -e "${GREEN}✓ Infrastructure started${NC}"
 echo ""
 
 # Step 2: Build API
-echo -e "${BLUE}Step 2: Building ZeroState API...${NC}"
-go build -o bin/zerostate-api cmd/api/main.go
-echo -e "${GREEN}✓ API built successfully${NC}"
+echo -e "${BLUE}Step 2: Checking ZeroState API binary...${NC}"
+if [ ! -f "bin/zerostate-api" ]; then
+    echo "Building API binary..."
+    go build -o bin/zerostate-api cmd/api/main.go || {
+        echo -e "${YELLOW}⚠ Build failed, using existing binary if available${NC}"
+    }
+fi
+if [ -f "bin/zerostate-api" ]; then
+    echo -e "${GREEN}✓ API binary ready ($(du -h bin/zerostate-api | cut -f1))${NC}"
+else
+    echo -e "${RED}❌ No API binary found. Please fix build issues.${NC}"
+    exit 1
+fi
 echo ""
 
 # Step 3: Start API

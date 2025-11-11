@@ -24,7 +24,7 @@ type Handlers struct {
 	hnsw         *search.HNSWIndex
 	taskQueue    *orchestration.TaskQueue
 	orchestrator *orchestration.Orchestrator
-	db           *database.DB
+	db           *database.Database
 	s3Storage    *storage.S3Storage
 	wsHub        *websocket.Hub
 
@@ -50,7 +50,7 @@ func NewHandlers(
 	hnsw *search.HNSWIndex,
 	taskQueue *orchestration.TaskQueue,
 	orchestrator *orchestration.Orchestrator,
-	db *database.DB,
+	db *database.Database,
 	s3Storage *storage.S3Storage,
 	wsHub *websocket.Hub,
 	wasmRunner *execution.WASMRunner,

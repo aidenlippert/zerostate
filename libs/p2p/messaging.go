@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"go.uber.org/zap"
@@ -70,7 +69,6 @@ const (
 	// Default timeouts
 	DefaultRequestTimeout  = 30 * time.Second
 	DefaultAckTimeout      = 5 * time.Second
-	DefaultCleanupInterval = 5 * time.Minute
 )
 
 // AgentMessage represents a message between agents

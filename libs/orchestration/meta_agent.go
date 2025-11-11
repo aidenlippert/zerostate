@@ -163,7 +163,7 @@ func (m *MetaAgent) SelectAgent(ctx context.Context, task *Task) (*database.Agen
 
 	m.logger.Info("agent selected via meta-agent",
 		zap.String("task_id", task.ID),
-		zap.String("agent_id", bestBid.Agent.ID),
+		zap.String("agent_id", bestBid.Agent.ID.String()),
 		zap.String("agent_name", bestBid.Agent.Name),
 		zap.Float64("bid_price", bestBid.BidPrice),
 		zap.Float64("score", bestBid.Score),
@@ -224,7 +224,7 @@ func (m *MetaAgent) hasRequiredCapabilities(agent *database.Agent, required []st
 	var agentCaps []string
 	if err := json.Unmarshal([]byte(agent.Capabilities), &agentCaps); err != nil {
 		m.logger.Warn("failed to parse agent capabilities",
-			zap.String("agent_id", agent.ID),
+			zap.String("agent_id", agent.ID.String()),
 			zap.Error(err),
 		)
 		return false
@@ -335,7 +335,7 @@ func (m *MetaAgent) scoreAgents(task *Task, bids []*AgentBid) []*AgentBid {
 	// Find min/max values for normalization
 	minPrice, maxPrice := math.MaxFloat64, 0.0
 	minTime, maxTime := int64(math.MaxInt64), int64(0)
-	maxRating, maxTasks := 0.0, int64(0)
+	maxRating, maxTasks := 0.0, int(0)
 
 	for _, bid := range bids {
 		if bid.BidPrice < minPrice {
@@ -423,7 +423,7 @@ func (m *MetaAgent) GetFailoverAgent(ctx context.Context, task *Task, failedAgen
 	// Filter out failed agent
 	filtered := make([]*database.Agent, 0)
 	for _, agent := range agents {
-		if agent.ID != failedAgentID {
+		if agent.ID.String() != failedAgentID {
 			filtered = append(filtered, agent)
 		}
 	}
@@ -442,7 +442,7 @@ func (m *MetaAgent) GetFailoverAgent(ctx context.Context, task *Task, failedAgen
 	scoredBids := m.scoreAgents(task, bids)
 
 	m.logger.Info("failover agent selected",
-		zap.String("agent_id", scoredBids[0].Agent.ID),
+		zap.String("agent_id", scoredBids[0].Agent.ID.String()),
 		zap.String("agent_name", scoredBids[0].Agent.Name),
 	)
 

@@ -1,0 +1,204 @@
+# FAANG-LEVEL DOCKER COMPOSE FOR LOCAL DEVELOPMENT
+# Following best practices:
+# - Named volumes for data persistence
+# - Health checks for all services
+# - Resource limits to prevent resource exhaustion
+# - Networks for service isolation
+# - Environment variable configuration
+# - Dependency ordering with depends_on
+# - Production-ready service definitions
+
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: zerostate-postgres
+    environment:
+      POSTGRES_USER: zerostate
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-zerostate_dev}
+      POSTGRES_DB: zerostate
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./libs/database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    networks:
+      - zerostate-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zerostate"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # Redis Cache (for rate limiting, sessions, etc.)
+  redis:
+    image: redis:7-alpine
+    container_name: zerostate-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - zerostate-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+
+  # ZeroState API
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: zerostate-api
+    ports:
+      - "8080:8080"
+      - "9090:9090"
+    environment:
+      # Database
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: zerostate
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-zerostate_dev}
+      DB_NAME: zerostate
+      DB_SSLMODE: disable
+
+      # Redis
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+
+      # JWT
+      JWT_SECRET: ${JWT_SECRET:-change_me_in_production}
+      JWT_ACCESS_EXPIRY: 15m
+      JWT_REFRESH_EXPIRY: 168h
+
+      # Server
+      SERVER_PORT: 8080
+      METRICS_PORT: 9090
+      ENV: development
+
+      # TLS (disabled for development)
+      TLS_ENABLED: "false"
+
+      # Rate Limiting
+      RATE_LIMIT_ENABLED: "true"
+      RATE_LIMIT_REQUESTS_PER_MINUTE: 100
+
+      # Logging
+      LOG_LEVEL: info
+      LOG_FORMAT: json
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - zerostate-network
+    healthcheck:
+      test: ["CMD", "/zerostate-api", "-health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+  # Prometheus (Metrics)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: zerostate-prometheus
+    ports:
+      - "9091:9090"
+    volumes:
+      - ./deployments/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    networks:
+      - zerostate-network
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  # Grafana (Monitoring Dashboard)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: zerostate-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_INSTALL_PLUGINS: grafana-clock-panel
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./deployments/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./deployments/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    networks:
+      - zerostate-network
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+
+networks:
+  zerostate-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.25.0.0/16

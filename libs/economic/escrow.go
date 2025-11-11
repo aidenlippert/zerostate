@@ -736,3 +736,33 @@ func (s *EscrowService) ProcessAutoReleases(ctx context.Context) (int, error) {
 
 	return count, nil
 }
+
+// CompleteEscrow marks an escrow as completed (used when payment channel was used instead)
+func (s *EscrowService) CompleteEscrow(ctx context.Context, escrowID uuid.UUID) error {
+	query := `
+		UPDATE escrows
+		SET status = $1,
+		    updated_at = CURRENT_TIMESTAMP
+		WHERE id = $2
+	`
+
+	result, err := s.db.ExecContext(ctx, query, "completed", escrowID)
+	if err != nil {
+		return fmt.Errorf("failed to complete escrow: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("escrow not found: %s", escrowID.String())
+	}
+
+	s.logger.Info("escrow completed",
+		zap.String("escrow_id", escrowID.String()),
+	)
+
+	return nil
+}

@@ -1,6 +1,8 @@
 package api
 
 import (
+	"database/sql"
+	"encoding/json"
 	"net/http"
 	"time"
 
@@ -49,7 +51,8 @@ func (h *Handlers) RegisterUser(c *gin.Context) {
 
 	// Check if user already exists
 	existingUser, err := h.db.GetUserByEmail(req.Email)
-	if err != nil {
+	if err != nil && err.Error() != "record not found" {
+		// Real database error (not just "not found")
 		h.logger.Error("failed to check existing user: " + err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
@@ -69,23 +72,28 @@ func (h *Handlers) RegisterUser(c *gin.Context) {
 	}
 
 	// Create user
+	// Generate a DID for the user (in production, this would be more sophisticated)
+	userDID := "did:zerostate:user:" + uuid.New().String()
+
 	user := &database.User{
-		ID:           uuid.New().String(),
-		FullName:     req.FullName,
-		Email:        req.Email,
-		PasswordHash: passwordHash,
-		CreatedAt:    time.Now(),
-		UpdatedAt:    time.Now(),
+		DID:          userDID,
+		Email:        sql.NullString{String: req.Email, Valid: true},
+		PasswordHash: sql.NullString{String: passwordHash, Valid: true},
+		IsActive:     true,
+		Metadata:     json.RawMessage(`{}`), // Initialize to empty JSON object
 	}
 
-	if err := h.db.CreateUser(user); err != nil {
+	// Use UserRepository to create user
+	userRepo := database.NewUserRepository(h.db)
+	if err := userRepo.Create(c.Request.Context(), user); err != nil {
 		h.logger.Error("failed to create user: " + err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
 
 	// Generate JWT token
-	token, err := auth.GenerateToken(user.ID, user.Email)
+	jwtService := auth.NewJWTService(auth.DefaultJWTConfig())
+	tokenPair, err := jwtService.GenerateTokenPair(user.ID, user.DID, user.Email.String, false)
 	if err != nil {
 		h.logger.Error("failed to generate token: " + err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
@@ -93,11 +101,12 @@ func (h *Handlers) RegisterUser(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, LoginResponse{
-		Token: token,
+		Token:        tokenPair.AccessToken,
+		RefreshToken: tokenPair.RefreshToken,
 		User: UserResponse{
-			ID:        user.ID,
-			Email:     user.Email,
-			FullName:  user.FullName,
+			ID:        user.ID.String(),
+			Email:     user.Email.String,
+			FullName:  req.FullName, // Store in response but not in DB for now
 			CreatedAt: user.CreatedAt.Format(time.RFC3339),
 		},
 		ExpiresIn: 86400, // 24 hours
@@ -112,27 +121,32 @@ func (h *Handlers) LoginUser(c *gin.Context) {
 		return
 	}
 
-	// Get user by email
+	// Get user by email - using GetUserByEmail which returns ErrNotFound
 	user, err := h.db.GetUserByEmail(req.Email)
 	if err != nil {
+		if err == database.ErrNotFound {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid email or password"})
+			return
+		}
 		h.logger.Error("failed to get user: " + err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
 
-	if user == nil {
+	// Check password
+	if !user.PasswordHash.Valid {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid email or password"})
 		return
 	}
 
-	// Check password
-	if !auth.CheckPassword(req.Password, user.PasswordHash) {
+	if err := auth.VerifyPassword(req.Password, user.PasswordHash.String); err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid email or password"})
 		return
 	}
 
 	// Generate JWT token
-	token, err := auth.GenerateToken(user.ID, user.Email)
+	jwtService := auth.NewJWTService(auth.DefaultJWTConfig())
+	tokenPair, err := jwtService.GenerateTokenPair(user.ID, user.DID, user.Email.String, false)
 	if err != nil {
 		h.logger.Error("failed to generate token: " + err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
@@ -140,11 +154,12 @@ func (h *Handlers) LoginUser(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, LoginResponse{
-		Token: token,
+		Token:        tokenPair.AccessToken,
+		RefreshToken: tokenPair.RefreshToken,
 		User: UserResponse{
-			ID:        user.ID,
-			Email:     user.Email,
-			FullName:  user.FullName,
+			ID:        user.ID.String(),
+			Email:     user.Email.String,
+			FullName:  "", // Not stored in DB currently
 			CreatedAt: user.CreatedAt.Format(time.RFC3339),
 		},
 		ExpiresIn: 86400, // 24 hours
@@ -161,28 +176,34 @@ func (h *Handlers) LogoutUser(c *gin.Context) {
 // GetCurrentUser retrieves the currently authenticated user
 func (h *Handlers) GetCurrentUser(c *gin.Context) {
 	// Get user ID from context (set by auth middleware)
-	userID, exists := c.Get("user_id")
+	userIDValue, exists := c.Get("user_id")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
 
-	user, err := h.db.GetUserByID(userID.(string))
+	userID, ok := userIDValue.(uuid.UUID)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user id"})
+		return
+	}
+
+	userRepo := database.NewUserRepository(h.db)
+	user, err := userRepo.GetByID(c.Request.Context(), userID)
 	if err != nil {
+		if err == database.ErrNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			return
+		}
 		h.logger.Error("failed to get user: " + err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
 
-	if user == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
-		return
-	}
-
 	c.JSON(http.StatusOK, UserResponse{
-		ID:        user.ID,
-		Email:     user.Email,
-		FullName:  user.FullName,
+		ID:        user.ID.String(),
+		Email:     user.Email.String,
+		FullName:  "", // Not stored in DB currently
 		CreatedAt: user.CreatedAt.Format(time.RFC3339),
 	})
 }
@@ -244,7 +265,11 @@ func (h *Handlers) UploadAvatar(c *gin.Context) {
 	// 4. Return the URL
 
 	// For now, return a placeholder URL with user ID
-	avatarURL := "https://ui-avatars.com/api/?name=" + userID.(string) + "&size=200&background=4A90E2&color=fff"
+	userIDStr := ""
+	if uid, ok := userID.(uuid.UUID); ok {
+		userIDStr = uid.String()
+	}
+	avatarURL := "https://ui-avatars.com/api/?name=" + userIDStr + "&size=200&background=4A90E2&color=fff"
 
 	c.JSON(http.StatusOK, gin.H{
 		"avatar_url": avatarURL,

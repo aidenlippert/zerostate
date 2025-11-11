@@ -11,6 +11,7 @@ WORKDIR /app
 COPY go.work go.mod go.sum ./
 
 # Copy all go.mod files first
+COPY libs/analytics/go.mod ./libs/analytics/
 COPY libs/api/go.mod ./libs/api/
 COPY libs/auth/go.mod ./libs/auth/
 COPY libs/database/go.mod ./libs/database/

@@ -4,8 +4,7 @@ toolchain go1.24.10
 
 use (
 	./cmd/api
-	./examples/agents/echo-agent
-	./libs/agentsdk
+	./libs/analytics
 	./libs/api
 	./libs/auth
 	./libs/database

@@ -1,0 +1,603 @@
+# Prometheus Alert Rules for ZeroState API
+# Version: 1.0.0
+# Purpose: Production-ready alerting for critical metrics
+#
+# Severity Levels:
+# - critical: Immediate action required (P0)
+# - warning: Action needed soon (P1-P2)
+# - info: Informational, monitor (P3)
+
+groups:
+  # ============================================================================
+  # HTTP & API Alerts
+  # ============================================================================
+  - name: http_alerts
+    interval: 30s
+    rules:
+      # High error rate (5xx responses)
+      - alert: HighHTTPErrorRate
+        expr: |
+          (
+            rate(http_requests_total{status=~"5.."}[5m])
+            /
+            rate(http_requests_total[5m])
+          ) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+          component: api
+          team: backend
+        annotations:
+          summary: "High HTTP 5xx error rate detected"
+          description: "HTTP 5xx error rate is {{ $value | humanizePercentage }} (threshold: 5%)"
+          impact: "Users experiencing service failures"
+          runbook_url: "https://docs.zerostate.ai/runbooks/high-error-rate"
+
+      # High client error rate (4xx responses)
+      - alert: HighHTTPClientErrorRate
+        expr: |
+          (
+            rate(http_requests_total{status=~"4.."}[5m])
+            /
+            rate(http_requests_total[5m])
+          ) > 0.15
+        for: 5m
+        labels:
+          severity: warning
+          component: api
+          team: backend
+        annotations:
+          summary: "High HTTP 4xx error rate detected"
+          description: "HTTP 4xx error rate is {{ $value | humanizePercentage }} (threshold: 15%)"
+          impact: "Possible API misuse or authentication issues"
+
+      # High API latency (p99)
+      - alert: HighAPILatency
+        expr: |
+          histogram_quantile(0.99,
+            rate(http_request_duration_seconds_bucket[5m])
+          ) > 2.0
+        for: 3m
+        labels:
+          severity: warning
+          component: api
+          team: backend
+        annotations:
+          summary: "API p99 latency is high"
+          description: "API p99 latency is {{ $value }}s (threshold: 2s)"
+          impact: "Degraded user experience, slow response times"
+
+      # Very high API latency (p99)
+      - alert: CriticalAPILatency
+        expr: |
+          histogram_quantile(0.99,
+            rate(http_request_duration_seconds_bucket[5m])
+          ) > 5.0
+        for: 2m
+        labels:
+          severity: critical
+          component: api
+          team: backend
+        annotations:
+          summary: "API p99 latency is critically high"
+          description: "API p99 latency is {{ $value }}s (threshold: 5s)"
+          impact: "Severe user experience degradation"
+          runbook_url: "https://docs.zerostate.ai/runbooks/high-latency"
+
+  # ============================================================================
+  # Database Alerts
+  # ============================================================================
+  - name: database_alerts
+    interval: 30s
+    rules:
+      # Database connection failures
+      - alert: DatabaseConnectionFailures
+        expr: |
+          rate(zerostate_database_errors_total{type="connection"}[5m]) > 1
+        for: 2m
+        labels:
+          severity: critical
+          component: database
+          team: backend
+        annotations:
+          summary: "Database connection failures detected"
+          description: "Database connection error rate: {{ $value }} errors/sec"
+          impact: "Service unable to access data, users experiencing errors"
+          runbook_url: "https://docs.zerostate.ai/runbooks/database-connection"
+
+      # High database query latency
+      - alert: HighDatabaseQueryLatency
+        expr: |
+          histogram_quantile(0.95,
+            rate(zerostate_database_query_duration_seconds_bucket[5m])
+          ) > 1.0
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+          team: backend
+        annotations:
+          summary: "High database query latency"
+          description: "Database p95 query latency is {{ $value }}s (threshold: 1s)"
+          impact: "Slow API responses, degraded performance"
+
+      # Database connection pool exhaustion
+      - alert: DatabaseConnectionPoolExhaustion
+        expr: |
+          (
+            zerostate_database_connections_active
+            /
+            zerostate_database_connections_max
+          ) > 0.9
+        for: 3m
+        labels:
+          severity: warning
+          component: database
+          team: backend
+        annotations:
+          summary: "Database connection pool nearly exhausted"
+          description: "Connection pool usage at {{ $value | humanizePercentage }}"
+          impact: "Risk of connection exhaustion, potential request failures"
+
+  # ============================================================================
+  # Task Execution Alerts
+  # ============================================================================
+  - name: execution_alerts
+    interval: 30s
+    rules:
+      # High task failure rate
+      - alert: HighTaskFailureRate
+        expr: |
+          (
+            rate(zerostate_tasks_total{status="failed"}[10m])
+            /
+            rate(zerostate_tasks_total[10m])
+          ) > 0.20
+        for: 5m
+        labels:
+          severity: critical
+          component: execution
+          team: backend
+        annotations:
+          summary: "High task failure rate detected"
+          description: "Task failure rate is {{ $value | humanizePercentage }} (threshold: 20%)"
+          impact: "Users experiencing task execution failures"
+          runbook_url: "https://docs.zerostate.ai/runbooks/task-failures"
+
+      # Task queue depth growing
+      - alert: TaskQueueBacklog
+        expr: |
+          zerostate_task_queue_depth > 100
+        for: 5m
+        labels:
+          severity: warning
+          component: execution
+          team: backend
+        annotations:
+          summary: "Task queue backlog growing"
+          description: "Task queue depth is {{ $value }} tasks (threshold: 100)"
+          impact: "Increased wait times for task execution"
+
+      # Critical task queue depth
+      - alert: CriticalTaskQueueBacklog
+        expr: |
+          zerostate_task_queue_depth > 500
+        for: 3m
+        labels:
+          severity: critical
+          component: execution
+          team: backend
+        annotations:
+          summary: "Critical task queue backlog"
+          description: "Task queue depth is {{ $value }} tasks (threshold: 500)"
+          impact: "System overloaded, severe delays in task execution"
+          runbook_url: "https://docs.zerostate.ai/runbooks/queue-backlog"
+
+      # High task execution duration
+      - alert: HighTaskExecutionDuration
+        expr: |
+          histogram_quantile(0.95,
+            rate(zerostate_task_duration_seconds_bucket[10m])
+          ) > 300
+        for: 10m
+        labels:
+          severity: warning
+          component: execution
+          team: backend
+        annotations:
+          summary: "Tasks taking longer than expected"
+          description: "Task p95 duration is {{ $value }}s (threshold: 300s)"
+          impact: "Slow task completion, resource inefficiency"
+
+      # Task timeout errors
+      - alert: HighTaskTimeoutRate
+        expr: |
+          rate(zerostate_timeout_errors_total[10m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: execution
+          team: backend
+        annotations:
+          summary: "High task timeout rate"
+          description: "Task timeout rate: {{ $value }} timeouts/sec"
+          impact: "Tasks failing due to timeouts, wasted resources"
+
+  # ============================================================================
+  # Orchestrator Alerts
+  # ============================================================================
+  - name: orchestrator_alerts
+    interval: 30s
+    rules:
+      # No orchestrator workers active
+      - alert: OrchestratorNoWorkers
+        expr: |
+          zerostate_orchestrator_workers_active == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: orchestrator
+          team: backend
+        annotations:
+          summary: "Orchestrator has no active workers"
+          description: "No orchestrator workers are active"
+          impact: "No task processing capability, service effectively down"
+          runbook_url: "https://docs.zerostate.ai/runbooks/orchestrator-workers"
+
+      # Low orchestrator worker count
+      - alert: LowOrchestratorWorkerCount
+        expr: |
+          zerostate_orchestrator_workers_active < 3
+        for: 5m
+        labels:
+          severity: warning
+          component: orchestrator
+          team: backend
+        annotations:
+          summary: "Low orchestrator worker count"
+          description: "Only {{ $value }} orchestrator workers active (expected: ≥3)"
+          impact: "Reduced task processing capacity"
+
+  # ============================================================================
+  # WASM Execution Alerts
+  # ============================================================================
+  - name: wasm_alerts
+    interval: 30s
+    rules:
+      # High WASM execution failure rate
+      - alert: HighWASMFailureRate
+        expr: |
+          (
+            rate(zerostate_wasm_executions_total{status="failed"}[10m])
+            /
+            rate(zerostate_wasm_executions_total[10m])
+          ) > 0.15
+        for: 5m
+        labels:
+          severity: critical
+          component: wasm
+          team: backend
+        annotations:
+          summary: "High WASM execution failure rate"
+          description: "WASM failure rate is {{ $value | humanizePercentage }} (threshold: 15%)"
+          impact: "Agent execution failures, degraded service"
+
+      # High WASM memory usage
+      - alert: HighWASMMemoryUsage
+        expr: |
+          histogram_quantile(0.95,
+            rate(zerostate_wasm_memory_bytes_bucket[5m])
+          ) > 500000000
+        for: 5m
+        labels:
+          severity: warning
+          component: wasm
+          team: backend
+        annotations:
+          summary: "High WASM memory usage detected"
+          description: "WASM p95 memory usage is {{ $value | humanize }}B (threshold: 500MB)"
+          impact: "Risk of OOM errors, potential memory exhaustion"
+
+  # ============================================================================
+  # P2P Network Alerts
+  # ============================================================================
+  - name: p2p_alerts
+    interval: 30s
+    rules:
+      # Low peer count
+      - alert: LowPeerCount
+        expr: |
+          zerostate_p2p_peers_connected < 3
+        for: 10m
+        labels:
+          severity: warning
+          component: p2p
+          team: backend
+        annotations:
+          summary: "Low P2P peer count"
+          description: "Only {{ $value }} peers connected (threshold: <3)"
+          impact: "Limited network connectivity, reduced resilience"
+
+      # High P2P message failure rate
+      - alert: HighP2PMessageFailureRate
+        expr: |
+          (
+            rate(zerostate_p2p_messages_failed_total[5m])
+            /
+            rate(zerostate_p2p_messages_sent_total[5m])
+          ) > 0.10
+        for: 5m
+        labels:
+          severity: warning
+          component: p2p
+          team: backend
+        annotations:
+          summary: "High P2P message failure rate"
+          description: "P2P message failure rate: {{ $value | humanizePercentage }}"
+          impact: "Network communication issues, potential data loss"
+
+      # P2P connection failures
+      - alert: HighP2PConnectionFailures
+        expr: |
+          rate(zerostate_p2p_connections_failed[5m]) > 1
+        for: 5m
+        labels:
+          severity: warning
+          component: p2p
+          team: backend
+        annotations:
+          summary: "High P2P connection failure rate"
+          description: "P2P connection failures: {{ $value }} failures/sec"
+          impact: "Network instability, peer connectivity issues"
+
+  # ============================================================================
+  # System Resource Alerts
+  # ============================================================================
+  - name: system_alerts
+    interval: 30s
+    rules:
+      # High memory usage
+      - alert: HighMemoryUsage
+        expr: |
+          (
+            process_resident_memory_bytes
+            /
+            node_memory_MemTotal_bytes
+          ) > 0.85
+        for: 5m
+        labels:
+          severity: warning
+          component: system
+          team: backend
+        annotations:
+          summary: "High memory usage detected"
+          description: "Memory usage at {{ $value | humanizePercentage }}"
+          impact: "Risk of OOM kill, service instability"
+
+      # Critical memory usage
+      - alert: CriticalMemoryUsage
+        expr: |
+          (
+            process_resident_memory_bytes
+            /
+            node_memory_MemTotal_bytes
+          ) > 0.95
+        for: 2m
+        labels:
+          severity: critical
+          component: system
+          team: backend
+        annotations:
+          summary: "Critical memory usage"
+          description: "Memory usage at {{ $value | humanizePercentage }}"
+          impact: "Imminent OOM risk, service may crash"
+          runbook_url: "https://docs.zerostate.ai/runbooks/memory-exhaustion"
+
+      # High CPU usage
+      - alert: HighCPUUsage
+        expr: |
+          rate(process_cpu_seconds_total[5m]) > 0.85
+        for: 10m
+        labels:
+          severity: warning
+          component: system
+          team: backend
+        annotations:
+          summary: "High CPU usage detected"
+          description: "CPU usage at {{ $value | humanizePercentage }}"
+          impact: "Degraded performance, slow response times"
+
+      # High goroutine count
+      - alert: HighGoroutineCount
+        expr: |
+          go_goroutines > 5000
+        for: 5m
+        labels:
+          severity: warning
+          component: system
+          team: backend
+        annotations:
+          summary: "High goroutine count"
+          description: "Goroutine count: {{ $value }} (threshold: 5000)"
+          impact: "Potential goroutine leak, resource exhaustion risk"
+
+      # Critical goroutine count
+      - alert: CriticalGoroutineCount
+        expr: |
+          go_goroutines > 10000
+        for: 3m
+        labels:
+          severity: critical
+          component: system
+          team: backend
+        annotations:
+          summary: "Critical goroutine count"
+          description: "Goroutine count: {{ $value }} (threshold: 10000)"
+          impact: "Goroutine leak likely, service instability"
+          runbook_url: "https://docs.zerostate.ai/runbooks/goroutine-leak"
+
+  # ============================================================================
+  # Health & Availability Alerts
+  # ============================================================================
+  - name: health_alerts
+    interval: 15s
+    rules:
+      # Service down (health endpoint)
+      - alert: ServiceDown
+        expr: |
+          up{job="zerostate-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: api
+          team: backend
+        annotations:
+          summary: "ZeroState API service is down"
+          description: "Health endpoint not responding"
+          impact: "Service completely unavailable to users"
+          runbook_url: "https://docs.zerostate.ai/runbooks/service-down"
+
+      # Service not ready (readiness endpoint)
+      - alert: ServiceNotReady
+        expr: |
+          probe_success{job="zerostate-api",probe="readiness"} == 0
+        for: 3m
+        labels:
+          severity: critical
+          component: api
+          team: backend
+        annotations:
+          summary: "ZeroState API service not ready"
+          description: "Readiness probe failing"
+          impact: "Service unable to handle traffic"
+          runbook_url: "https://docs.zerostate.ai/runbooks/not-ready"
+
+      # High restart rate
+      - alert: HighRestartRate
+        expr: |
+          rate(kube_pod_container_status_restarts_total{container="zerostate-api"}[15m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: api
+          team: backend
+        annotations:
+          summary: "High container restart rate"
+          description: "Container restarting {{ $value }} times/min"
+          impact: "Service instability, intermittent outages"
+
+  # ============================================================================
+  # Economic Layer Alerts
+  # ============================================================================
+  - name: economic_alerts
+    interval: 60s
+    rules:
+      # High auction failure rate
+      - alert: HighAuctionFailureRate
+        expr: |
+          (
+            rate(zerostate_auctions_total{status="failed"}[10m])
+            /
+            rate(zerostate_auctions_total[10m])
+          ) > 0.20
+        for: 10m
+        labels:
+          severity: warning
+          component: economic
+          team: backend
+        annotations:
+          summary: "High auction failure rate"
+          description: "Auction failure rate: {{ $value | humanizePercentage }}"
+          impact: "Task allocation issues, reduced efficiency"
+
+      # High bid rejection rate
+      - alert: HighBidRejectionRate
+        expr: |
+          (
+            rate(zerostate_bids_total{status="rejected"}[10m])
+            /
+            rate(zerostate_bids_total[10m])
+          ) > 0.50
+        for: 10m
+        labels:
+          severity: info
+          component: economic
+          team: backend
+        annotations:
+          summary: "High bid rejection rate"
+          description: "Bid rejection rate: {{ $value | humanizePercentage }}"
+          impact: "Suboptimal agent selection, potential capacity issues"
+
+  # ============================================================================
+  # Storage Alerts
+  # ============================================================================
+  - name: storage_alerts
+    interval: 60s
+    rules:
+      # High storage usage
+      - alert: HighStorageUsage
+        expr: |
+          zerostate_execution_storage_used_bytes > 10000000000
+        for: 10m
+        labels:
+          severity: warning
+          component: storage
+          team: backend
+        annotations:
+          summary: "High storage usage"
+          description: "Storage usage: {{ $value | humanize }}B (threshold: 10GB)"
+          impact: "Storage quota approaching, may need cleanup"
+
+      # S3 upload failures
+      - alert: HighS3UploadFailures
+        expr: |
+          rate(zerostate_storage_operations_total{operation="upload",status="failed"}[10m]) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          component: storage
+          team: backend
+        annotations:
+          summary: "High S3 upload failure rate"
+          description: "S3 upload failures: {{ $value }} failures/sec"
+          impact: "Agent uploads failing, service degradation"
+
+# ============================================================================
+# Alert Routing Configuration (for Alertmanager)
+# ============================================================================
+# To be configured in alertmanager.yml:
+#
+# route:
+#   group_by: ['alertname', 'component']
+#   group_wait: 10s
+#   group_interval: 10s
+#   repeat_interval: 12h
+#   receiver: 'default'
+#   routes:
+#     - match:
+#         severity: critical
+#       receiver: 'pagerduty-critical'
+#       continue: true
+#     - match:
+#         severity: warning
+#       receiver: 'slack-warnings'
+#     - match:
+#         severity: info
+#       receiver: 'slack-info'
+#
+# receivers:
+#   - name: 'default'
+#     slack_configs:
+#       - channel: '#alerts'
+#         api_url: '${SLACK_WEBHOOK_URL}'
+#   - name: 'pagerduty-critical'
+#     pagerduty_configs:
+#       - service_key: '${PAGERDUTY_SERVICE_KEY}'
+#   - name: 'slack-warnings'
+#     slack_configs:
+#       - channel: '#alerts-warnings'
+#         api_url: '${SLACK_WEBHOOK_URL}'
+#   - name: 'slack-info'
+#     slack_configs:
+#       - channel: '#alerts-info'
+#         api_url: '${SLACK_WEBHOOK_URL}'

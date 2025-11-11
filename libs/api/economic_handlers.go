@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/aidenlippert/zerostate/libs/economic"
+	"github.com/aidenlippert/zerostate/libs/execution"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -1056,4 +1057,270 @@ func (h *Handlers) GetDispute(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, response)
+}
+
+// Economic Task Execution Handlers (Sprint 9)
+
+// ExecuteEconomicTask handles integrated task execution with escrow, WASM execution, and automatic settlement
+// POST /api/v1/economic/tasks/execute
+func (h *Handlers) ExecuteEconomicTask(c *gin.Context) {
+	logger := h.logger.With(zap.String("handler", "ExecuteEconomicTask"))
+
+	var req struct {
+		TaskID  string  `json:"task_id" binding:"required"`
+		AgentID string  `json:"agent_id" binding:"required"`
+		Input   string  `json:"input" binding:"required"`
+		Budget  float64 `json:"budget" binding:"required,gt=0"`
+		Timeout int     `json:"timeout"` // Seconds, default: 30
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		logger.Error("invalid request", zap.Error(err))
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "invalid request",
+			"message": err.Error(),
+		})
+		return
+	}
+
+	// Set default timeout
+	timeout := time.Duration(req.Timeout) * time.Second
+	if timeout == 0 {
+		timeout = 30 * time.Second
+	}
+
+	// Parse UUIDs
+	taskID, err := uuid.Parse(req.TaskID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid task_id: must be a valid UUID",
+		})
+		return
+	}
+
+	agentID, err := uuid.Parse(req.AgentID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid agent_id: must be a valid UUID",
+		})
+		return
+	}
+
+	// Extract user ID from JWT token
+	userID, exists := c.Get("user_id")
+	if !exists {
+		userID = "anonymous"
+	}
+	userUUID, err := uuid.Parse(userID.(string))
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "Invalid user authentication",
+		})
+		return
+	}
+
+	logger.Info("executing economic task",
+		zap.String("task_id", req.TaskID),
+		zap.String("agent_id", req.AgentID),
+		zap.String("user_id", userID.(string)),
+		zap.Float64("budget", req.Budget),
+	)
+
+	// Initialize economic executor if not already done
+	if h.execHandlers.economicExec == nil {
+		escrowSvc := economic.NewEscrowService(h.db.Conn(), h.logger)
+		economicMetrics := execution.NewEconomicTaskMetrics(nil) // Uses default registry
+		h.execHandlers.economicExec = execution.NewEconomicExecutor(
+			h.wasmRunner,
+			h.resultStore,
+			h.binaryStore,
+			escrowSvc,
+			economicMetrics,
+			h.logger,
+		)
+	}
+
+	econExec := h.execHandlers.economicExec
+
+	// Step 1: Create escrow for payment
+	escrowSvc := economic.NewEscrowService(h.db.Conn(), h.logger)
+	escrow, err := escrowSvc.CreateEscrow(
+		c.Request.Context(),
+		req.TaskID,
+		userID.(string),
+		req.AgentID,
+		req.Budget,
+		30,  // 30 minutes expiration
+		nil, // no auto-release
+		"",  // no conditions
+	)
+	if err != nil {
+		logger.Error("failed to create escrow",
+			zap.Error(err),
+			zap.String("task_id", req.TaskID),
+		)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to create escrow: " + err.Error(),
+		})
+		return
+	}
+
+	escrowID := escrow.ID // Extract UUID from Escrow struct
+
+	logger.Info("escrow created",
+		zap.String("escrow_id", escrowID.String()),
+		zap.String("task_id", req.TaskID),
+	)
+
+	// Step 2: Fund escrow
+	if err := escrowSvc.FundEscrow(c.Request.Context(), escrowID, userID.(string)); err != nil {
+		logger.Error("failed to fund escrow",
+			zap.Error(err),
+			zap.String("escrow_id", escrowID.String()),
+		)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to fund escrow: " + err.Error(),
+		})
+		return
+	}
+
+	logger.Info("escrow funded",
+		zap.String("escrow_id", escrowID.String()),
+		zap.Float64("amount", req.Budget),
+	)
+
+	// Step 3: Execute task with economic integration
+	execReq := &execution.EconomicExecutionRequest{
+		TaskID:   taskID,
+		AgentID:  agentID,
+		UserID:   userUUID,
+		Input:    req.Input,
+		Budget:   req.Budget,
+		EscrowID: escrowID,
+		Timeout:  timeout,
+	}
+
+	result, err := econExec.ExecuteWithEconomics(c.Request.Context(), execReq)
+	if err != nil {
+		logger.Error("economic task execution failed",
+			zap.Error(err),
+			zap.String("task_id", req.TaskID),
+		)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":         "Task execution failed: " + err.Error(),
+			"escrow_id":     escrowID.String(),
+			"escrow_status": "refunded",
+		})
+		return
+	}
+
+	// Step 4: Return result
+	response := gin.H{
+		"task_id":          result.TaskID.String(),
+		"agent_id":         result.AgentID.String(),
+		"success":          result.Success,
+		"output":           result.Output,
+		"error":            result.Error,
+		"execution_time":   result.ExecutionTime.String(),
+		"resource_usage":   result.ResourceUsage,
+		"escrow_id":        result.EscrowID.String(),
+		"escrow_status":    result.EscrowStatus,
+		"amount_paid":      result.AmountPaid,
+		"payment_method":   result.PaymentMethod,
+		"reputation_delta": result.ReputationDelta,
+		"timestamp":        result.Timestamp.Format(time.RFC3339),
+	}
+
+	logger.Info("economic task executed successfully",
+		zap.String("task_id", req.TaskID),
+		zap.Bool("success", result.Success),
+		zap.String("escrow_status", result.EscrowStatus),
+		zap.Float64("amount_paid", result.AmountPaid),
+	)
+
+	c.JSON(http.StatusOK, response)
+}
+
+// GetEconomicTaskResult retrieves the result of an economic task execution
+// GET /api/v1/economic/tasks/:id/result
+func (h *Handlers) GetEconomicTaskResult(c *gin.Context) {
+	logger := h.logger.With(zap.String("handler", "GetEconomicTaskResult"))
+	taskID := c.Param("id")
+
+	// Parse task ID
+	taskUUID, err := uuid.Parse(taskID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Invalid task_id: must be a valid UUID",
+		})
+		return
+	}
+
+	// Initialize economic executor if not already done
+	if h.execHandlers.economicExec == nil {
+		escrowSvc := economic.NewEscrowService(h.db.Conn(), h.logger)
+		economicMetrics := execution.NewEconomicTaskMetrics(nil) // Uses default registry
+		h.execHandlers.economicExec = execution.NewEconomicExecutor(
+			h.wasmRunner,
+			h.resultStore,
+			h.binaryStore,
+			escrowSvc,
+			economicMetrics,
+			h.logger,
+		)
+	}
+
+	// Get execution receipt
+	receipt, err := h.execHandlers.economicExec.GetExecutionReceipt(c.Request.Context(), taskUUID)
+	if err != nil {
+		logger.Error("failed to get execution receipt",
+			zap.Error(err),
+			zap.String("task_id", taskID),
+		)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to get execution result: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, receipt)
+}
+
+// EconomicHealthCheck verifies the economic execution system is operational
+// GET /api/v1/economic/health
+func (h *Handlers) EconomicHealthCheck(c *gin.Context) {
+	logger := h.logger.With(zap.String("handler", "EconomicHealthCheck"))
+
+	// Initialize economic executor if not already done
+	if h.execHandlers.economicExec == nil {
+		escrowSvc := economic.NewEscrowService(h.db.Conn(), h.logger)
+		economicMetrics := execution.NewEconomicTaskMetrics(nil) // Uses default registry
+		h.execHandlers.economicExec = execution.NewEconomicExecutor(
+			h.wasmRunner,
+			h.resultStore,
+			h.binaryStore,
+			escrowSvc,
+			economicMetrics,
+			h.logger,
+		)
+	}
+
+	if err := h.execHandlers.economicExec.HealthCheck(c.Request.Context()); err != nil {
+		logger.Error("economic health check failed", zap.Error(err))
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"status": "unhealthy",
+			"error":  err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": "healthy",
+		"services": gin.H{
+			"wasm_runner":    "operational",
+			"result_store":   "operational",
+			"binary_store":   "operational",
+			"escrow_service": "operational",
+		},
+	})
 }

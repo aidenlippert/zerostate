@@ -1,0 +1,609 @@
+package api
+
+import (
+	"encoding/json"
+	"net/http"
+	"time"
+
+	"go.uber.org/zap"
+
+	"github.com/aidenlippert/zerostate/libs/economic"
+	"github.com/aidenlippert/zerostate/libs/marketplace"
+)
+
+// SECURITY REQUIREMENTS FOR PAYMENT APIs:
+// 1. Authentication: All endpoints require valid user authentication
+// 2. Authorization: Users can only access their own accounts
+// 3. Rate Limiting: Prevent abuse and DoS attacks
+// 4. Input Validation: Strict validation of all inputs
+// 5. HTTPS Only: Payment endpoints must use TLS
+// 6. Audit Logging: All payment operations must be logged
+// 7. Idempotency: Support idempotency keys for payment operations
+
+// PaymentHandlers handles payment-related API endpoints
+type PaymentHandlers struct {
+	logger             *zap.Logger
+	paymentService     *economic.PaymentChannelService
+	paymentMarketplace *marketplace.PaymentMarketplaceService
+	paymentSplitting   *marketplace.PaymentSplittingService
+}
+
+// NewPaymentHandlers creates payment API handlers
+func NewPaymentHandlers(
+	logger *zap.Logger,
+	paymentService *economic.PaymentChannelService,
+	paymentMarketplace *marketplace.PaymentMarketplaceService,
+	paymentSplitting *marketplace.PaymentSplittingService,
+) *PaymentHandlers {
+	return &PaymentHandlers{
+		logger:             logger,
+		paymentService:     paymentService,
+		paymentMarketplace: paymentMarketplace,
+		paymentSplitting:   paymentSplitting,
+	}
+}
+
+// Deposit handles POST /api/v1/payments/deposit
+// SECURITY: Requires authentication, input validation, rate limiting
+func (h *PaymentHandlers) Deposit(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		UserDID string  `json:"user_did"`
+		Amount  float64 `json:"amount"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.logger.Error("failed to decode deposit request", zap.Error(err))
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Validate inputs
+	if req.UserDID == "" {
+		http.Error(w, "Missing user_did", http.StatusBadRequest)
+		return
+	}
+
+	if req.Amount <= 0 {
+		http.Error(w, "Amount must be positive", http.StatusBadRequest)
+		return
+	}
+
+	// Maximum deposit limit (prevent large transactions without KYC)
+	maxDeposit := 10000.0
+	if req.Amount > maxDeposit {
+		http.Error(w, "Amount exceeds maximum deposit limit", http.StatusBadRequest)
+		return
+	}
+
+	// TODO: Add authentication check
+	// if !isAuthenticated(r, req.UserDID) {
+	//     http.Error(w, "Unauthorized", http.StatusUnauthorized)
+	//     return
+	// }
+
+	// Perform deposit
+	err := h.paymentService.Deposit(r.Context(), req.UserDID, req.Amount)
+	if err != nil {
+		h.logger.Error("deposit failed",
+			zap.Error(err),
+			zap.String("user_did", req.UserDID),
+			zap.Float64("amount", req.Amount),
+		)
+		http.Error(w, "Deposit failed: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	h.logger.Info("deposit successful",
+		zap.String("user_did", req.UserDID),
+		zap.Float64("amount", req.Amount),
+	)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":  true,
+		"user_did": req.UserDID,
+		"amount":   req.Amount,
+		"message":  "Deposit successful",
+	})
+}
+
+// Withdraw handles POST /api/v1/payments/withdraw
+// SECURITY: Requires authentication, balance check, fraud detection
+func (h *PaymentHandlers) Withdraw(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		UserDID string  `json:"user_did"`
+		Amount  float64 `json:"amount"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.logger.Error("failed to decode withdraw request", zap.Error(err))
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Validate inputs
+	if req.UserDID == "" {
+		http.Error(w, "Missing user_did", http.StatusBadRequest)
+		return
+	}
+
+	if req.Amount <= 0 {
+		http.Error(w, "Amount must be positive", http.StatusBadRequest)
+		return
+	}
+
+	// Check balance before withdrawal
+	balance, err := h.paymentService.GetBalance(r.Context(), req.UserDID)
+	if err != nil {
+		h.logger.Error("failed to get balance", zap.Error(err))
+		http.Error(w, "Failed to check balance", http.StatusInternalServerError)
+		return
+	}
+
+	if balance < req.Amount {
+		http.Error(w, "Insufficient funds", http.StatusBadRequest)
+		return
+	}
+
+	// Perform withdrawal
+	err = h.paymentService.Withdraw(r.Context(), req.UserDID, req.Amount)
+	if err != nil {
+		h.logger.Error("withdrawal failed",
+			zap.Error(err),
+			zap.String("user_did", req.UserDID),
+			zap.Float64("amount", req.Amount),
+		)
+		http.Error(w, "Withdrawal failed: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	h.logger.Info("withdrawal successful",
+		zap.String("user_did", req.UserDID),
+		zap.Float64("amount", req.Amount),
+	)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":           true,
+		"user_did":          req.UserDID,
+		"amount":            req.Amount,
+		"remaining_balance": balance - req.Amount,
+		"message":           "Withdrawal successful",
+	})
+}
+
+// GetBalance handles GET /api/v1/payments/balance
+// SECURITY: Requires authentication, authorization check
+func (h *PaymentHandlers) GetBalance(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	userDID := r.URL.Query().Get("user_did")
+	if userDID == "" {
+		http.Error(w, "Missing user_did parameter", http.StatusBadRequest)
+		return
+	}
+
+	// TODO: Add authorization check
+	// if !isAuthorized(r, userDID) {
+	//     http.Error(w, "Unauthorized", http.StatusUnauthorized)
+	//     return
+	// }
+
+	balance, err := h.paymentService.GetBalance(r.Context(), userDID)
+	if err != nil {
+		h.logger.Error("failed to get balance", zap.Error(err), zap.String("user_did", userDID))
+		http.Error(w, "Failed to get balance", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":  true,
+		"user_did": userDID,
+		"balance":  balance,
+	})
+}
+
+// GetTransactionHistory handles GET /api/v1/payments/history
+// SECURITY: Requires authentication, pagination to prevent DoS
+func (h *PaymentHandlers) GetTransactionHistory(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	userDID := r.URL.Query().Get("user_did")
+	if userDID == "" {
+		http.Error(w, "Missing user_did parameter", http.StatusBadRequest)
+		return
+	}
+
+	// Get transaction history for user
+	history, err := h.paymentService.GetTransactionHistory(r.Context(), userDID)
+	if err != nil {
+		h.logger.Error("failed to get transaction history", zap.Error(err))
+		http.Error(w, "Failed to get transaction history", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":      true,
+		"user_did":     userDID,
+		"transactions": history,
+		"count":        len(history),
+	})
+}
+
+// CreatePaymentChannel handles POST /api/v1/payments/channels/create
+// SECURITY: Requires authentication, validates both parties exist
+func (h *PaymentHandlers) CreatePaymentChannel(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		PayerDID  string  `json:"payer_did"`
+		PayeeDID  string  `json:"payee_did"`
+		Amount    float64 `json:"amount"`
+		AuctionID string  `json:"auction_id,omitempty"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.logger.Error("failed to decode create channel request", zap.Error(err))
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Validate inputs
+	if req.PayerDID == "" || req.PayeeDID == "" {
+		http.Error(w, "Missing payer_did or payee_did", http.StatusBadRequest)
+		return
+	}
+
+	if req.Amount <= 0 {
+		http.Error(w, "Amount must be positive", http.StatusBadRequest)
+		return
+	}
+
+	// Check payer has sufficient balance
+	balance, err := h.paymentService.GetBalance(r.Context(), req.PayerDID)
+	if err != nil {
+		h.logger.Error("failed to check balance", zap.Error(err))
+		http.Error(w, "Failed to check balance", http.StatusInternalServerError)
+		return
+	}
+
+	if balance < req.Amount {
+		http.Error(w, "Insufficient funds", http.StatusBadRequest)
+		return
+	}
+
+	// Create payment channel
+	channel, err := h.paymentService.CreateChannel(
+		r.Context(),
+		req.PayerDID,
+		req.PayeeDID,
+		req.Amount,
+		req.AuctionID,
+	)
+	if err != nil {
+		h.logger.Error("failed to create payment channel",
+			zap.Error(err),
+			zap.String("payer", req.PayerDID),
+			zap.String("payee", req.PayeeDID),
+		)
+		http.Error(w, "Failed to create payment channel: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	h.logger.Info("payment channel created",
+		zap.String("channel_id", channel.ID),
+		zap.String("payer", req.PayerDID),
+		zap.String("payee", req.PayeeDID),
+		zap.Float64("amount", req.Amount),
+	)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"channel": channel,
+	})
+}
+
+// GetPaymentChannel handles GET /api/v1/payments/channels/:id
+// SECURITY: Requires authentication, authorization check
+func (h *PaymentHandlers) GetPaymentChannel(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	channelID := r.URL.Query().Get("id")
+	if channelID == "" {
+		http.Error(w, "Missing channel ID", http.StatusBadRequest)
+		return
+	}
+
+	channel, err := h.paymentService.GetChannel(r.Context(), channelID)
+	if err != nil {
+		h.logger.Error("failed to get payment channel", zap.Error(err))
+		http.Error(w, "Channel not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"channel": channel,
+	})
+}
+
+// ClosePaymentChannel handles POST /api/v1/payments/channels/:id/close
+// SECURITY: Requires authentication, only payer/payee can close
+func (h *PaymentHandlers) ClosePaymentChannel(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	channelID := r.URL.Query().Get("id")
+	if channelID == "" {
+		http.Error(w, "Missing channel ID", http.StatusBadRequest)
+		return
+	}
+
+	// Close channel
+	err := h.paymentService.CloseChannel(r.Context(), channelID)
+	if err != nil {
+		h.logger.Error("failed to close payment channel", zap.Error(err))
+		http.Error(w, "Failed to close channel: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	h.logger.Info("payment channel closed", zap.String("channel_id", channelID))
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Channel closed successfully",
+	})
+}
+
+// ExecuteTaskWithPayment handles POST /api/v1/payments/tasks/execute
+// SECURITY: Atomic operation with rollback on failure
+func (h *PaymentHandlers) ExecuteTaskWithPayment(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req marketplace.AuctionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.logger.Error("failed to decode task execution request", zap.Error(err))
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Execute task with payment
+	allocation, channelID, err := h.paymentMarketplace.AllocateTaskWithPayment(r.Context(), &req)
+	if err != nil {
+		h.logger.Error("task allocation with payment failed", zap.Error(err))
+		http.Error(w, "Task allocation failed: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	h.logger.Info("task allocated with payment",
+		zap.String("task_id", req.TaskID),
+		zap.String("winner", allocation.WinnerDID),
+		zap.Float64("price", allocation.FinalPrice),
+		zap.String("channel_id", channelID),
+	)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":    true,
+		"allocation": allocation,
+		"channel_id": channelID,
+	})
+}
+
+// CompleteTaskWithPayment handles POST /api/v1/payments/tasks/complete
+// SECURITY: Idempotent operation, validates task ownership
+func (h *PaymentHandlers) CompleteTaskWithPayment(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		TaskID   string `json:"task_id"`
+		AgentDID string `json:"agent_did"`
+		Success  bool   `json:"success"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.logger.Error("failed to decode task completion request", zap.Error(err))
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Validate inputs
+	if req.TaskID == "" || req.AgentDID == "" {
+		http.Error(w, "Missing task_id or agent_did", http.StatusBadRequest)
+		return
+	}
+
+	// Complete task with payment settlement
+	err := h.paymentMarketplace.CompleteTaskWithPayment(r.Context(), req.TaskID, req.AgentDID, req.Success)
+	if err != nil {
+		h.logger.Error("task completion with payment failed", zap.Error(err))
+		http.Error(w, "Task completion failed: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	h.logger.Info("task completed with payment",
+		zap.String("task_id", req.TaskID),
+		zap.String("agent_did", req.AgentDID),
+		zap.Bool("success", req.Success),
+	)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Task completed and payment settled",
+	})
+}
+
+// ExecuteDAGPayment handles POST /api/v1/payments/dag/execute
+// SECURITY: Atomic settlement across multiple agents
+func (h *PaymentHandlers) ExecuteDAGPayment(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req marketplace.DAGPaymentRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.logger.Error("failed to decode DAG payment request", zap.Error(err))
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Execute DAG payment
+	result, err := h.paymentSplitting.ExecuteDAGPayment(r.Context(), &req)
+	if err != nil {
+		h.logger.Error("DAG payment failed", zap.Error(err))
+		http.Error(w, "DAG payment failed: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	h.logger.Info("DAG payment executed",
+		zap.String("workflow_id", req.WorkflowID),
+		zap.Float64("total_paid", result.TotalPaid),
+		zap.Int("successful_splits", result.SuccessfulSplits),
+		zap.Int("failed_splits", result.FailedSplits),
+	)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"result":  result,
+	})
+}
+
+// ExecuteAtomicDAGPayment handles POST /api/v1/payments/dag/execute-atomic
+// SECURITY: All-or-nothing settlement guarantee
+func (h *PaymentHandlers) ExecuteAtomicDAGPayment(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req marketplace.DAGPaymentRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.logger.Error("failed to decode atomic DAG payment request", zap.Error(err))
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Execute atomic DAG payment
+	result, err := h.paymentSplitting.ExecuteAtomicDAGPayment(r.Context(), &req)
+	if err != nil {
+		h.logger.Error("atomic DAG payment failed", zap.Error(err))
+		http.Error(w, "Atomic DAG payment failed: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	h.logger.Info("atomic DAG payment executed",
+		zap.String("workflow_id", req.WorkflowID),
+		zap.Float64("total_paid", result.TotalPaid),
+		zap.Int("successful_splits", result.SuccessfulSplits),
+	)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"result":  result,
+	})
+}
+
+// GetWorkflowPayment handles GET /api/v1/payments/dag/:workflow_id
+// SECURITY: Requires authentication, authorization check
+func (h *PaymentHandlers) GetWorkflowPayment(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	workflowID := r.URL.Query().Get("workflow_id")
+	if workflowID == "" {
+		http.Error(w, "Missing workflow_id parameter", http.StatusBadRequest)
+		return
+	}
+
+	result, err := h.paymentSplitting.GetWorkflowPayment(r.Context(), workflowID)
+	if err != nil {
+		h.logger.Error("failed to get workflow payment", zap.Error(err))
+		http.Error(w, "Workflow payment not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"result":  result,
+	})
+}
+
+// VerifyBalanceInvariant handles GET /api/v1/payments/verify
+// SECURITY: Admin-only endpoint for system integrity checks
+func (h *PaymentHandlers) VerifyBalanceInvariant(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// TODO: Add admin authentication check
+	// if !isAdmin(r) {
+	//     http.Error(w, "Forbidden", http.StatusForbidden)
+	//     return
+	// }
+
+	err := h.paymentService.VerifyBalanceInvariant()
+	if err != nil {
+		h.logger.Error("balance invariant verification failed", zap.Error(err))
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   err.Error(),
+			"message": "Balance invariant violated - system integrity compromised",
+		})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":   true,
+		"message":   "Balance invariant verified",
+		"timestamp": time.Now(),
+	})
+}

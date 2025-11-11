@@ -14,11 +14,12 @@ import (
 
 // ExecutionHandlers handles task execution and results
 type ExecutionHandlers struct {
-	logger      *zap.Logger
-	db          *database.DB
-	wasmRunner  *execution.WASMRunner
-	resultStore *execution.PostgresResultStore
-	binaryStore execution.BinaryStore
+	logger       *zap.Logger
+	db           *database.DB
+	wasmRunner   *execution.WASMRunner
+	resultStore  *execution.PostgresResultStore
+	binaryStore  execution.BinaryStore
+	economicExec *execution.EconomicExecutor // Sprint 9: Economic task execution
 }
 
 // NewExecutionHandlers creates execution handlers
@@ -156,7 +157,7 @@ func (h *ExecutionHandlers) ExecuteTaskDirect(c *gin.Context) {
 	if result.ExitCode == 0 {
 		h.logger.Info("updating agent stats",
 			zap.String("agent_id", req.AgentID),
-			zap.Int64("current_tasks", agent.TasksCompleted),
+			zap.Int("current_tasks", agent.TasksCompleted),
 		)
 		// Note: Would need UpdateAgentStats method in database package
 	}

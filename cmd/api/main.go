@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"flag"
 	"fmt"
 	"os"
@@ -18,6 +19,7 @@ import (
 	"github.com/aidenlippert/zerostate/libs/storage"
 	"github.com/aidenlippert/zerostate/libs/websocket"
 	"github.com/libp2p/go-libp2p"
+	_ "github.com/lib/pq" // PostgreSQL driver
 	"go.uber.org/zap"
 )
 
@@ -75,12 +77,47 @@ func main() {
 
 	// Initialize database
 	logger.Info("initializing database")
-	db, err := database.NewDB("./zerostate.db")
-	if err != nil {
-		logger.Fatal("failed to initialize database", zap.Error(err))
+
+	// Check for DATABASE_URL environment variable (Postgres in production)
+	var db *database.Database
+	if databaseURL := os.Getenv("DATABASE_URL"); databaseURL != "" {
+		logger.Info("connecting to PostgreSQL database")
+		sqlDB, err := sql.Open("postgres", databaseURL)
+		if err != nil {
+			logger.Fatal("failed to connect to PostgreSQL", zap.Error(err))
+		}
+		db = database.NewDatabase(sqlDB)
+
+		// Run Postgres migrations
+		logger.Info("running database migrations")
+		if err := database.Migrate(ctx, db.Conn()); err != nil {
+			logger.Fatal("failed to run database migrations", zap.Error(err))
+		}
+		logger.Info("database migrations completed successfully")
+
+		// Run additional schema fixes
+		logger.Info("running schema fix migrations")
+		if err := db.RunMigrations(ctx); err != nil {
+			logger.Warn("schema fix migrations failed (may already be applied)", zap.Error(err))
+		} else {
+			logger.Info("schema fix migrations completed successfully")
+			// Verify the schema
+			if err := db.VerifySchema(ctx); err != nil {
+				logger.Warn("schema verification failed", zap.Error(err))
+			}
+		}
+	} else {
+		// Fallback to SQLite for local development
+		logger.Info("using SQLite database for local development")
+		var err error
+		db, err = database.NewDB("./zerostate.db")
+		if err != nil {
+			logger.Fatal("failed to initialize SQLite database", zap.Error(err))
+		}
+		logger.Info("SQLite database initialized (migrations not supported for SQLite)")
 	}
 	defer db.Close()
-	logger.Info("database initialized")
+	logger.Info("database connection established")
 
 	// Initialize HNSW index for agent discovery
 	logger.Info("initializing HNSW index")
@@ -165,10 +202,9 @@ func main() {
 	// Use real WASM executor if S3 is configured, otherwise use mock
 	var executor orchestration.TaskExecutor
 	if binaryStore != nil {
-		// Note: Full TaskExecutor integration requires adapter implementations
-		// For now, continue using mock until adapters are complete
-		executor = orchestration.NewMockTaskExecutor(logger)
-		logger.Info("using mock task executor (WASM components ready, adapters pending)")
+		// Use real WASM task executor with production components
+		executor = orchestration.NewWASMTaskExecutor(wasmRunner, binaryStore, logger)
+		logger.Info("using real WASM task executor with S3 backend")
 	} else {
 		executor = orchestration.NewMockTaskExecutor(logger)
 		logger.Info("using mock task executor (S3 not configured)")

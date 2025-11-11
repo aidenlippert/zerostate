@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/zerostate/libs/telemetry"
+	"github.com/aidenlippert/zerostate/libs/telemetry"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )

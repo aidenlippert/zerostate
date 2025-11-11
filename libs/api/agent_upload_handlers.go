@@ -2,6 +2,7 @@ package api
 
 import (
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -35,12 +36,12 @@ type UploadAgentRequest struct {
 
 // UploadAgentResponse represents the upload response
 type UploadAgentResponse struct {
-	AgentID      string `json:"agent_id"`
-	BinaryURL    string `json:"binary_url"`
-	BinaryHash   string `json:"binary_hash"`
-	BinarySize   int64  `json:"binary_size"`
-	Status       string `json:"status"` // "uploaded", "validating", "active"
-	Message      string `json:"message"`
+	AgentID    string `json:"agent_id"`
+	BinaryURL  string `json:"binary_url"`
+	BinaryHash string `json:"binary_hash"`
+	BinarySize int64  `json:"binary_size"`
+	Status     string `json:"status"` // "uploaded", "validating", "active"
+	Message    string `json:"message"`
 }
 
 // UploadAgent handles WASM agent binary upload
@@ -189,22 +190,23 @@ func (h *Handlers) UploadAgent(c *gin.Context) {
 	}
 
 	now := time.Now()
+
+	// Convert string agent ID to uuid.UUID
+	agentUUID, _ := uuid.Parse(agentID)
+
 	agent := &database.Agent{
-		ID:             agentID,
-		UserID:         userID.(string),
+		ID:             agentUUID,
+		DID:            agentID,
 		Name:           metadata.Name,
-		Description:    metadata.Description,
-		Version:        metadata.Version,
-		Capabilities:   string(capabilitiesJSON),
-		Status:         "active",
+		Description:    sql.NullString{String: metadata.Description, Valid: true},
+		Capabilities:   json.RawMessage(capabilitiesJSON),
+		Status:         database.AgentStatus("active"),
 		Price:          metadata.Price,
-		BinaryURL:      binaryURL,
-		BinaryHash:     fileHash,
-		BinarySize:     header.Size,
 		TasksCompleted: 0,
 		Rating:         0.0,
 		CreatedAt:      now,
 		UpdatedAt:      now,
+		Metadata:       json.RawMessage(`{}`),
 	}
 
 	if h.db != nil {

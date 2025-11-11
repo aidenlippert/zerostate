@@ -2,6 +2,8 @@ package api
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"net/http"
 	"sync"
 	"time"
@@ -14,10 +16,70 @@ import (
 	"golang.org/x/time/rate"
 )
 
-// loggingMiddleware logs HTTP requests
+// Context keys for correlation ID
+const (
+	correlationIDKey  = "correlation_id"
+	requestIDKey      = "request_id"
+)
+
+// generateCorrelationID generates a unique correlation ID
+func generateCorrelationID() string {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		// Fallback to timestamp-based ID if random fails
+		return hex.EncodeToString([]byte(time.Now().Format("20060102150405.000000")))
+	}
+	return hex.EncodeToString(b)
+}
+
+// correlationIDMiddleware adds correlation ID to request context and response headers
+func correlationIDMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Try to get correlation ID from request header
+		correlationID := c.GetHeader("X-Correlation-ID")
+		if correlationID == "" {
+			// Generate new correlation ID if not provided
+			correlationID = generateCorrelationID()
+		}
+
+		// Generate request ID (unique for each request)
+		requestID := generateCorrelationID()
+
+		// Store in context
+		c.Set(correlationIDKey, correlationID)
+		c.Set(requestIDKey, requestID)
+
+		// Add to response headers
+		c.Writer.Header().Set("X-Correlation-ID", correlationID)
+		c.Writer.Header().Set("X-Request-ID", requestID)
+
+		// Store in Go context for propagation to other services
+		ctx := context.WithValue(c.Request.Context(), correlationIDKey, correlationID)
+		ctx = context.WithValue(ctx, requestIDKey, requestID)
+		c.Request = c.Request.WithContext(ctx)
+
+		c.Next()
+	}
+}
+
+// loggingMiddleware logs HTTP requests with structured logging and correlation IDs
 func loggingMiddleware(logger *zap.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
+
+		// Get correlation IDs (should be set by correlationIDMiddleware)
+		correlationID, _ := c.Get(correlationIDKey)
+		requestID, _ := c.Get(requestIDKey)
+
+		// Log request start
+		logger.Info("http request started",
+			zap.String("correlation_id", toString(correlationID)),
+			zap.String("request_id", toString(requestID)),
+			zap.String("method", c.Request.Method),
+			zap.String("path", c.Request.URL.Path),
+			zap.String("client_ip", c.ClientIP()),
+			zap.String("user_agent", c.Request.UserAgent()),
+		)
 
 		// Process request
 		c.Next()
@@ -25,7 +87,16 @@ func loggingMiddleware(logger *zap.Logger) gin.HandlerFunc {
 		// Log after request is processed
 		duration := time.Since(start)
 
-		logger.Info("http request",
+		// Get user ID if authenticated
+		var userID string
+		if uid, exists := c.Get("user_id"); exists {
+			userID = toString(uid)
+		}
+
+		// Build log fields
+		fields := []zap.Field{
+			zap.String("correlation_id", toString(correlationID)),
+			zap.String("request_id", toString(requestID)),
 			zap.String("method", c.Request.Method),
 			zap.String("path", c.Request.URL.Path),
 			zap.Int("status", c.Writer.Status()),
@@ -33,8 +104,34 @@ func loggingMiddleware(logger *zap.Logger) gin.HandlerFunc {
 			zap.String("client_ip", c.ClientIP()),
 			zap.String("user_agent", c.Request.UserAgent()),
 			zap.Int("response_size", c.Writer.Size()),
-		)
+		}
+
+		// Add user ID if available
+		if userID != "" {
+			fields = append(fields, zap.String("user_id", userID))
+		}
+
+		// Log at appropriate level based on status code
+		statusCode := c.Writer.Status()
+		if statusCode >= 500 {
+			logger.Error("http request completed", fields...)
+		} else if statusCode >= 400 {
+			logger.Warn("http request completed", fields...)
+		} else {
+			logger.Info("http request completed", fields...)
+		}
 	}
+}
+
+// toString safely converts interface{} to string
+func toString(v interface{}) string {
+	if v == nil {
+		return ""
+	}
+	if s, ok := v.(string); ok {
+		return s
+	}
+	return ""
 }
 
 // tracingMiddleware adds OpenTelemetry tracing to requests
@@ -194,7 +291,8 @@ func authMiddleware() gin.HandlerFunc {
 		tokenString := parts[1]
 
 		// Validate token using auth library
-		claims, err := auth.ValidateToken(tokenString)
+		jwtService := auth.NewJWTService(auth.DefaultJWTConfig())
+		claims, err := jwtService.ValidateAccessToken(tokenString)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"error":   "unauthorized",

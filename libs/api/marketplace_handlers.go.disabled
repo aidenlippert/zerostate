@@ -1,0 +1,444 @@
+package api
+
+import (
+	"encoding/json"
+	"net/http"
+	"time"
+
+	"go.uber.org/zap"
+
+	"github.com/aidenlippert/zerostate/libs/identity"
+	"github.com/aidenlippert/zerostate/libs/marketplace"
+	"github.com/aidenlippert/zerostate/libs/p2p"
+	"github.com/aidenlippert/zerostate/libs/reputation"
+)
+
+// MarketplaceHandlers handles marketplace-related API endpoints
+type MarketplaceHandlers struct {
+	logger             *zap.Logger
+	discoveryService   *marketplace.DiscoveryService
+	auctionService     *marketplace.AuctionService
+	marketplaceService *marketplace.MarketplaceService
+	orchestrator       *marketplace.MarketplaceOrchestrator
+}
+
+// NewMarketplaceHandlers creates marketplace API handlers
+func NewMarketplaceHandlers(
+	logger *zap.Logger,
+	messageBus p2p.MessageBus,
+	reputationService *reputation.ReputationService,
+) *MarketplaceHandlers {
+	// Initialize services
+	discoveryService := marketplace.NewDiscoveryService(messageBus, reputationService)
+	auctionService := marketplace.NewAuctionService(messageBus)
+	marketplaceService := marketplace.NewMarketplaceService(
+		discoveryService,
+		auctionService,
+		messageBus,
+		reputationService,
+	)
+	orchestrator := marketplace.NewMarketplaceOrchestrator(marketplaceService, messageBus)
+
+	return &MarketplaceHandlers{
+		logger:             logger,
+		discoveryService:   discoveryService,
+		auctionService:     auctionService,
+		marketplaceService: marketplaceService,
+		orchestrator:       orchestrator,
+	}
+}
+
+// RegisterAgent handles POST /api/v1/agents/register
+func (h *MarketplaceHandlers) RegisterAgent(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Name         string            `json:"name"`
+		Description  string            `json:"description"`
+		Capabilities []string          `json:"capabilities"`
+		PricingModel string            `json:"pricing_model"`
+		Metadata     map[string]string `json:"metadata,omitempty"`
+		MaxCapacity  int               `json:"max_capacity,omitempty"`
+		Region       string            `json:"region,omitempty"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.logger.Error("failed to decode request", zap.Error(err))
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Validate required fields
+	if req.Name == "" || len(req.Capabilities) == 0 {
+		http.Error(w, "Missing required fields: name, capabilities", http.StatusBadRequest)
+		return
+	}
+
+	// Create agent card
+	agentCard := &identity.AgentCard{
+		DID:          "did:zerostate:agent:" + randomID(),
+		Name:         req.Name,
+		Description:  req.Description,
+		Capabilities: req.Capabilities,
+		PricingModel: req.PricingModel,
+		Metadata:     req.Metadata,
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+	}
+
+	// Register with discovery service
+	if err := h.discoveryService.RegisterAgent(r.Context(), agentCard); err != nil {
+		h.logger.Error("failed to register agent", zap.Error(err))
+		http.Error(w, "Failed to register agent", http.StatusInternalServerError)
+		return
+	}
+
+	// Update max capacity if provided
+	if req.MaxCapacity > 0 {
+		record, _ := h.discoveryService.index.GetAgent(agentCard.DID)
+		if record != nil {
+			record.MaxCapacity = req.MaxCapacity
+			h.discoveryService.index.UpdateAgent(record)
+		}
+	}
+
+	// Update region if provided
+	if req.Region != "" {
+		record, _ := h.discoveryService.index.GetAgent(agentCard.DID)
+		if record != nil {
+			record.Region = req.Region
+			h.discoveryService.index.UpdateAgent(record)
+		}
+	}
+
+	h.logger.Info("agent registered",
+		zap.String("did", agentCard.DID),
+		zap.String("name", req.Name),
+		zap.Strings("capabilities", req.Capabilities),
+	)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"agent":   agentCard,
+	})
+}
+
+// UnregisterAgent handles DELETE /api/v1/agents/:did
+func (h *MarketplaceHandlers) UnregisterAgent(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	agentDID := r.URL.Query().Get("did")
+	if agentDID == "" {
+		http.Error(w, "Missing agent DID", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.discoveryService.UnregisterAgent(r.Context(), agentDID); err != nil {
+		h.logger.Error("failed to unregister agent", zap.Error(err), zap.String("did", agentDID))
+		http.Error(w, "Failed to unregister agent", http.StatusInternalServerError)
+		return
+	}
+
+	h.logger.Info("agent unregistered", zap.String("did", agentDID))
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Agent unregistered successfully",
+	})
+}
+
+// UpdateAgentStatus handles PUT /api/v1/agents/:did/status
+func (h *MarketplaceHandlers) UpdateAgentStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	agentDID := r.URL.Query().Get("did")
+	if agentDID == "" {
+		http.Error(w, "Missing agent DID", http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		Status string `json:"status"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	status := marketplace.AgentStatus(req.Status)
+	if err := h.discoveryService.UpdateAgentStatus(r.Context(), agentDID, status); err != nil {
+		h.logger.Error("failed to update agent status", zap.Error(err))
+		http.Error(w, "Failed to update status", http.StatusInternalServerError)
+		return
+	}
+
+	h.logger.Info("agent status updated", zap.String("did", agentDID), zap.String("status", req.Status))
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Status updated successfully",
+	})
+}
+
+// DiscoverAgents handles POST /api/v1/agents/discover
+func (h *MarketplaceHandlers) DiscoverAgents(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var query marketplace.DiscoveryQuery
+	if err := json.NewDecoder(r.Body).Decode(&query); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	results, err := h.discoveryService.DiscoverAgents(r.Context(), &query)
+	if err != nil {
+		h.logger.Error("discovery failed", zap.Error(err))
+		http.Error(w, "Discovery failed", http.StatusInternalServerError)
+		return
+	}
+
+	h.logger.Info("agents discovered",
+		zap.Int("count", len(results)),
+		zap.Strings("capabilities", query.Capabilities),
+	)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"agents":  results,
+		"count":   len(results),
+	})
+}
+
+// GetAgentStats handles GET /api/v1/agents/stats
+func (h *MarketplaceHandlers) GetAgentStats(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	counts := h.discoveryService.GetAgentCount()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"stats": map[string]interface{}{
+			"total":       counts[marketplace.AgentStatusOnline] + counts[marketplace.AgentStatusBusy] + counts[marketplace.AgentStatusOffline] + counts[marketplace.AgentStatusMaintenance],
+			"online":      counts[marketplace.AgentStatusOnline],
+			"busy":        counts[marketplace.AgentStatusBusy],
+			"offline":     counts[marketplace.AgentStatusOffline],
+			"maintenance": counts[marketplace.AgentStatusMaintenance],
+		},
+	})
+}
+
+// CreateAuction handles POST /api/v1/auctions/create
+func (h *MarketplaceHandlers) CreateAuction(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		TaskID        string                 `json:"task_id"`
+		UserID        string                 `json:"user_id"`
+		Capabilities  []string               `json:"capabilities"`
+		TaskType      string                 `json:"task_type"`
+		Input         map[string]interface{} `json:"input"`
+		MaxPrice      float64                `json:"max_price"`
+		Timeout       int                    `json:"timeout_seconds"`
+		AuctionType   string                 `json:"auction_type,omitempty"`
+		Duration      int                    `json:"duration_seconds,omitempty"`
+		ReservePrice  float64                `json:"reserve_price,omitempty"`
+		MinReputation float64                `json:"min_reputation,omitempty"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Validate required fields
+	if req.TaskID == "" || req.UserID == "" || len(req.Capabilities) == 0 || req.MaxPrice <= 0 {
+		http.Error(w, "Missing required fields", http.StatusBadRequest)
+		return
+	}
+
+	// Build auction request
+	auctionReq := &marketplace.AuctionRequest{
+		TaskID:          req.TaskID,
+		UserID:          req.UserID,
+		Capabilities:    req.Capabilities,
+		TaskType:        req.TaskType,
+		Input:           req.Input,
+		MaxPrice:        req.MaxPrice,
+		Timeout:         time.Duration(req.Timeout) * time.Second,
+		AuctionDuration: time.Duration(req.Duration) * time.Second,
+		ReservePrice:    req.ReservePrice,
+		MinReputation:   req.MinReputation,
+	}
+
+	if req.AuctionType != "" {
+		auctionReq.AuctionType = marketplace.AuctionType(req.AuctionType)
+	}
+
+	// Allocate task via marketplace
+	result, err := h.marketplaceService.AllocateTask(r.Context(), auctionReq)
+	if err != nil {
+		h.logger.Error("auction allocation failed", zap.Error(err))
+		http.Error(w, "Auction failed: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	h.logger.Info("auction completed",
+		zap.String("auction_id", result.AuctionID),
+		zap.String("winner", result.WinnerDID),
+		zap.Float64("price", result.FinalPrice),
+		zap.Int("bids", result.NumBids),
+	)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"result":  result,
+	})
+}
+
+// SubmitBid handles POST /api/v1/auctions/:id/bid
+func (h *MarketplaceHandlers) SubmitBid(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	auctionID := r.URL.Query().Get("id")
+	if auctionID == "" {
+		http.Error(w, "Missing auction ID", http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		AgentDID      string  `json:"agent_did"`
+		Price         float64 `json:"price"`
+		EstimatedTime int     `json:"estimated_time_seconds"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.AgentDID == "" || req.Price <= 0 {
+		http.Error(w, "Missing required fields", http.StatusBadRequest)
+		return
+	}
+
+	err := h.marketplaceService.SubmitBidForAgent(
+		r.Context(),
+		auctionID,
+		req.AgentDID,
+		req.Price,
+		time.Duration(req.EstimatedTime)*time.Second,
+	)
+
+	if err != nil {
+		h.logger.Error("bid submission failed", zap.Error(err))
+		http.Error(w, "Bid submission failed: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	h.logger.Info("bid submitted",
+		zap.String("auction_id", auctionID),
+		zap.String("agent_did", req.AgentDID),
+		zap.Float64("price", req.Price),
+	)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Bid submitted successfully",
+	})
+}
+
+// GetAuctionStatus handles GET /api/v1/auctions/:id
+func (h *MarketplaceHandlers) GetAuctionStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	auctionID := r.URL.Query().Get("id")
+	if auctionID == "" {
+		http.Error(w, "Missing auction ID", http.StatusBadRequest)
+		return
+	}
+
+	auction, exists := h.auctionService.GetAuction(auctionID)
+	if !exists {
+		http.Error(w, "Auction not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"auction": auction,
+	})
+}
+
+// ExecuteTaskWithMarketplace handles POST /api/v1/marketplace/execute
+func (h *MarketplaceHandlers) ExecuteTaskWithMarketplace(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req marketplace.AuctionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Execute task via marketplace orchestrator
+	result, err := h.orchestrator.ExecuteTask(r.Context(), &req)
+	if err != nil {
+		h.logger.Error("marketplace execution failed", zap.Error(err))
+		http.Error(w, "Execution failed: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	h.logger.Info("task executed via marketplace",
+		zap.String("task_id", req.TaskID),
+		zap.String("agent", result.AgentDID),
+		zap.Duration("duration", result.ExecutionTime),
+	)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"result":  result,
+	})
+}
+
+// randomID generates a random ID for testing
+func randomID() string {
+	return time.Now().Format("20060102150405")
+}

@@ -60,8 +60,20 @@ func (s *DatabaseAgentSelector) convertToAgentCard(dbAgent *database.Agent) *ide
 	// Parse capabilities from JSON string
 	// For now, create a simple AgentCard matching the identity.AgentCard structure
 
+	// Extract description from sql.NullString
+	description := ""
+	if dbAgent.Description.Valid {
+		description = dbAgent.Description.String
+	}
+
+	// Use DID field (string) from new Agent struct
+	agentDID := dbAgent.DID
+	if agentDID == "" {
+		agentDID = dbAgent.ID.String() // Fallback to ID if DID is empty
+	}
+
 	return &identity.AgentCard{
-		DID: dbAgent.ID, // Use database ID as DID for now
+		DID: agentDID,
 		Endpoints: &identity.Endpoints{
 			Libp2p: []string{}, // TODO: Get from agent metadata
 		},
@@ -71,16 +83,16 @@ func (s *DatabaseAgentSelector) convertToAgentCard(dbAgent *database.Agent) *ide
 				Version: "1.0.0",
 				Cost: &identity.Cost{
 					Unit:  "task",
-					Price: dbAgent.Price,
+					Price: 0.10, // TODO: Parse from pricing_model JSON
 				},
 				Metadata: map[string]interface{}{
-					"description": dbAgent.Description,
-					"rating":      dbAgent.Rating,
+					"description": description,
+					"status":      string(dbAgent.Status),
 				},
 			},
 		},
 		Reputation: &identity.Reputation{
-			Score: dbAgent.Rating,
+			Score: 0.8, // TODO: Get from reputation system
 		},
 		Proof: &identity.Proof{
 			Type:         "SystemGenerated",

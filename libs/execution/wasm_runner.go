@@ -112,9 +112,92 @@ func (r *WASMRunner) Execute(ctx context.Context, wasmBinary []byte, input []byt
 
 // ExecuteWithLimits runs WASM with resource limits
 func (r *WASMRunner) ExecuteWithLimits(ctx context.Context, wasmBinary []byte, input []byte, limits ResourceLimits) (*WASMResult, error) {
-	// TODO: Implement memory and CPU limits
-	// For now, just use timeout
-	return r.Execute(ctx, wasmBinary, input)
+	startTime := time.Now()
+
+	r.logger.Info("starting WASM execution with limits",
+		zap.Int("binary_size", len(wasmBinary)),
+		zap.Int("input_size", len(input)),
+		zap.Int("max_memory_mb", limits.MaxMemoryMB),
+		zap.Duration("timeout", limits.Timeout),
+	)
+
+	// Create context with timeout from limits
+	timeout := limits.Timeout
+	if timeout == 0 {
+		timeout = r.timeout // fallback to default
+	}
+	execCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	// Create runtime with memory limits
+	runtimeConfig := wazero.NewRuntimeConfig()
+	if limits.MaxMemoryMB > 0 {
+		// Convert MB to pages (each page is 64KB)
+		maxMemoryPages := uint32(limits.MaxMemoryMB * 16) // 16 pages per MB (1MB = 1024KB / 64KB)
+		runtimeConfig = runtimeConfig.WithMemoryLimitPages(maxMemoryPages)
+	}
+
+	runtime := wazero.NewRuntimeWithConfig(execCtx, runtimeConfig)
+	defer runtime.Close(execCtx)
+
+	// Instantiate WASI (provides filesystem, env, etc.)
+	wasi_snapshot_preview1.MustInstantiate(execCtx, runtime)
+
+	// Capture stdout and stderr
+	stdoutBuf := &captureWriter{}
+	stderrBuf := &captureWriter{}
+
+	// Configure module with stdio
+	config := wazero.NewModuleConfig().
+		WithStdout(stdoutBuf).
+		WithStderr(stderrBuf).
+		WithStdin(nil). // No stdin for now
+		WithStartFunctions("_start")
+
+	// Compile and instantiate the WASM module
+	compiled, err := runtime.CompileModule(execCtx, wasmBinary)
+	if err != nil {
+		r.logger.Error("failed to compile WASM module", zap.Error(err))
+		return &WASMResult{
+			ExitCode: -1,
+			Error:    fmt.Errorf("compilation failed: %w", err),
+			Duration: time.Since(startTime),
+		}, err
+	}
+	defer compiled.Close(execCtx)
+
+	// Instantiate and run
+	module, err := runtime.InstantiateModule(execCtx, compiled, config)
+	if err != nil {
+		r.logger.Error("failed to instantiate WASM module", zap.Error(err))
+		return &WASMResult{
+			ExitCode: -1,
+			Stdout:   stdoutBuf.Bytes(),
+			Stderr:   stderrBuf.Bytes(),
+			Error:    fmt.Errorf("instantiation failed: %w", err),
+			Duration: time.Since(startTime),
+		}, err
+	}
+	defer module.Close(execCtx)
+
+	duration := time.Since(startTime)
+
+	result := &WASMResult{
+		ExitCode: 0, // If we got here, execution succeeded
+		Stdout:   stdoutBuf.Bytes(),
+		Stderr:   stderrBuf.Bytes(),
+		Duration: duration,
+	}
+
+	r.logger.Info("WASM execution completed with limits",
+		zap.Int("exit_code", result.ExitCode),
+		zap.Int("stdout_size", len(result.Stdout)),
+		zap.Int("stderr_size", len(result.Stderr)),
+		zap.Duration("duration", duration),
+		zap.Int("max_memory_mb", limits.MaxMemoryMB),
+	)
+
+	return result, nil
 }
 
 // ResourceLimits defines execution constraints

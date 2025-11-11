@@ -12,11 +12,12 @@ import (
 
 // SubmitTaskRequest represents a task submission request
 type SubmitTaskRequest struct {
-	Query       string                 `json:"query" binding:"required"`
-	Constraints map[string]interface{} `json:"constraints"`
-	Budget      float64                `json:"budget" binding:"required,gt=0"`
-	Timeout     int                    `json:"timeout"` // seconds
-	Priority    string                 `json:"priority"` // "low", "medium", "high"
+	Query        string                 `json:"query" binding:"required"`
+	Capabilities []string               `json:"capabilities"` // Agent capabilities required for this task
+	Constraints  map[string]interface{} `json:"constraints"`
+	Budget       float64                `json:"budget" binding:"required,gt=0"`
+	Timeout      int                    `json:"timeout"` // seconds
+	Priority     string                 `json:"priority"` // "low", "medium", "high"
 }
 
 // SubmitTaskResponse represents the task submission response
@@ -96,11 +97,17 @@ func (h *Handlers) SubmitTask(c *gin.Context) {
 	// For now, use a placeholder
 	userID := "user-" + c.ClientIP()
 
+	// Use capabilities from request, or default to query-processing
+	capabilities := req.Capabilities
+	if len(capabilities) == 0 {
+		capabilities = []string{"query-processing"} // Default for backward compatibility
+	}
+
 	// Create task
 	task := orchestration.NewTask(
 		userID,
 		"general-query", // Task type
-		[]string{"query-processing"}, // Capabilities (TODO: infer from query)
+		capabilities,
 		map[string]interface{}{
 			"query": req.Query,
 			"constraints": req.Constraints,

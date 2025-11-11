@@ -94,9 +94,10 @@ func NewServer(config *Config, handlers *Handlers, logger *zap.Logger) *Server {
 
 	router := gin.New()
 
-	// Global middleware
+	// Global middleware (order matters!)
 	router.Use(gin.Recovery())
-	router.Use(loggingMiddleware(logger))
+	router.Use(correlationIDMiddleware()) // Add correlation IDs first
+	router.Use(loggingMiddleware(logger)) // Then logging with correlation IDs
 
 	if config.EnableTracing {
 		router.Use(tracingMiddleware(tracer))
@@ -173,17 +174,16 @@ func (s *Server) setupRoutes() {
 			}
 		}
 
-		// TEMPORARY: Allow agent registration and task submission without auth for testing
-		v1.POST("/agents/register", s.handlers.RegisterAgent)
-		v1.POST("/tasks/submit", s.handlers.SubmitTask)
-		v1.GET("/tasks/:id", s.handlers.GetTask)
-		v1.GET("/tasks/:id/status", s.handlers.GetTaskStatus)
-		v1.GET("/tasks/:id/result", s.handlers.GetTaskResult)
-
 		// Protected routes - require authentication
 		protected := v1.Group("")
 		protected.Use(authMiddleware())
 		{
+			// Agent registration and task management now require auth
+			protected.POST("/agents/register", s.handlers.RegisterAgent)
+			protected.POST("/tasks/submit", s.handlers.SubmitTask)
+			protected.GET("/tasks/:id", s.handlers.GetTask)
+			protected.GET("/tasks/:id/status", s.handlers.GetTaskStatus)
+			protected.GET("/tasks/:id/result", s.handlers.GetTaskResult)
 			// Agent management
 			agents := protected.Group("/agents")
 			{
@@ -292,7 +292,27 @@ func (s *Server) setupRoutes() {
 				economic.GET("/disputes/:id", s.handlers.GetDispute)
 				economic.POST("/disputes/:id/evidence", s.handlers.SubmitEvidence)
 				economic.POST("/disputes/:id/resolve", s.handlers.ResolveDispute)
+
+				// Economic task execution (Sprint 9)
+				economic.POST("/tasks/execute", s.handlers.ExecuteEconomicTask)
+				economic.GET("/tasks/:id/result", s.handlers.GetEconomicTaskResult)
+				economic.GET("/health", s.handlers.EconomicHealthCheck)
 			}
+
+		// Analytics and monitoring
+		analytics := protected.Group("/analytics")
+		{
+			analytics.GET("/escrow", s.handlers.GetEscrowMetrics)
+			analytics.GET("/auctions", s.handlers.GetAuctionMetrics)
+			analytics.GET("/payment-channels", s.handlers.GetPaymentChannelMetrics)
+			analytics.GET("/reputation", s.handlers.GetReputationMetrics)
+			analytics.GET("/delegations", s.handlers.GetDelegationMetrics)
+			analytics.GET("/disputes", s.handlers.GetDisputeMetrics)
+			analytics.GET("/economic-health", s.handlers.GetEconomicHealthMetrics)
+			analytics.GET("/time-series", s.handlers.GetTimeSeriesData)
+			analytics.GET("/anomalies", s.handlers.DetectAnomalies)
+			analytics.GET("/dashboard", s.handlers.GetAnalyticsDashboard)
+		}
 		}
 	}
 }
@@ -330,35 +350,159 @@ func (s *Server) Stop() error {
 	return s.server.Shutdown(ctx)
 }
 
-// handleHealth handles health check requests
+// handleHealth handles health check requests (liveness probe)
+// Returns 200 OK if the service is alive, even if degraded
 func (s *Server) handleHealth(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
-		"status":  "healthy",
+	checks := make(map[string]interface{})
+	overallStatus := "healthy"
+
+	// Check if handlers are initialized
+	if s.handlers == nil {
+		overallStatus = "unhealthy"
+		checks["handlers"] = map[string]interface{}{
+			"status":  "unhealthy",
+			"message": "handlers not initialized",
+		}
+	} else {
+		checks["handlers"] = map[string]interface{}{
+			"status":  "healthy",
+			"message": "handlers initialized",
+		}
+	}
+
+	// Check database connection if available
+	if s.handlers != nil && s.handlers.db != nil {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Second)
+		defer cancel()
+
+		if err := s.handlers.db.Conn().PingContext(ctx); err != nil {
+			overallStatus = "degraded"
+			checks["database"] = map[string]interface{}{
+				"status":  "degraded",
+				"message": fmt.Sprintf("database ping failed: %v", err),
+			}
+		} else {
+			checks["database"] = map[string]interface{}{
+				"status":  "healthy",
+				"message": "database connection OK",
+			}
+		}
+	}
+
+	// Check orchestrator if available
+	if s.handlers != nil && s.handlers.orchestrator != nil {
+		metrics := s.handlers.orchestrator.GetMetrics()
+		checks["orchestrator"] = map[string]interface{}{
+			"status":         "healthy",
+			"workers_active": metrics.ActiveWorkers,
+			"tasks_total":    metrics.TasksProcessed,
+			"tasks_succeeded": metrics.TasksSucceeded,
+			"tasks_failed":   metrics.TasksFailed,
+		}
+	}
+
+	// Return appropriate status code
+	statusCode := http.StatusOK
+	if overallStatus == "unhealthy" {
+		statusCode = http.StatusServiceUnavailable
+	}
+
+	c.JSON(statusCode, gin.H{
+		"status":  overallStatus,
 		"service": "zerostate-api",
 		"version": "0.1.0",
 		"time":    time.Now().UTC(),
+		"checks":  checks,
 	})
 }
 
-// handleReady handles readiness check requests
+// handleReady handles readiness check requests (readiness probe)
+// Returns 200 OK only if all critical dependencies are ready
 func (s *Server) handleReady(c *gin.Context) {
+	checks := make(map[string]interface{})
+	ready := true
+
 	// Check if handlers are initialized
 	if s.handlers == nil {
+		ready = false
+		checks["handlers"] = map[string]interface{}{
+			"status":  "not_ready",
+			"message": "handlers not initialized",
+		}
 		c.JSON(http.StatusServiceUnavailable, gin.H{
 			"status": "not ready",
 			"reason": "handlers not initialized",
+			"checks": checks,
 		})
 		return
 	}
 
-	// Additional readiness checks can be added here
-	// (database connection, external services, etc.)
-
-	c.JSON(http.StatusOK, gin.H{
+	checks["handlers"] = map[string]interface{}{
 		"status":  "ready",
-		"service": "zerostate-api",
-		"time":    time.Now().UTC(),
-	})
+		"message": "handlers initialized",
+	}
+
+	// Check database connection (critical dependency)
+	if s.handlers.db != nil {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Second)
+		defer cancel()
+
+		if err := s.handlers.db.Conn().PingContext(ctx); err != nil {
+			ready = false
+			checks["database"] = map[string]interface{}{
+				"status":  "not_ready",
+				"message": fmt.Sprintf("database connection failed: %v", err),
+			}
+		} else {
+			checks["database"] = map[string]interface{}{
+				"status":  "ready",
+				"message": "database connection OK",
+			}
+		}
+	}
+
+	// Check orchestrator (critical dependency)
+	if s.handlers.orchestrator != nil {
+		metrics := s.handlers.orchestrator.GetMetrics()
+		if metrics.ActiveWorkers == 0 {
+			ready = false
+			checks["orchestrator"] = map[string]interface{}{
+				"status":  "not_ready",
+				"message": "no workers active",
+			}
+		} else {
+			checks["orchestrator"] = map[string]interface{}{
+				"status":         "ready",
+				"workers_active": metrics.ActiveWorkers,
+				"tasks_processed": metrics.TasksProcessed,
+			}
+		}
+	}
+
+	// Check WebSocket hub (non-critical)
+	if s.handlers.wsHub != nil {
+		checks["websocket"] = map[string]interface{}{
+			"status":  "ready",
+			"message": "WebSocket hub active",
+		}
+	}
+
+	// Return appropriate response
+	if ready {
+		c.JSON(http.StatusOK, gin.H{
+			"status":  "ready",
+			"service": "zerostate-api",
+			"time":    time.Now().UTC(),
+			"checks":  checks,
+		})
+	} else {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"status":  "not ready",
+			"service": "zerostate-api",
+			"time":    time.Now().UTC(),
+			"checks":  checks,
+		})
+	}
 }
 
 // Address returns the server's listening address

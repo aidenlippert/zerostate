@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZeroState Economic Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-gray-900 text-gray-100">
+    <div id="app" class="min-h-screen">
+        <!-- Header -->
+        <header class="bg-gray-800 border-b border-gray-700">
+            <div class="container mx-auto px-4 py-4">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <h1 class="text-2xl font-bold text-blue-400">ZeroState Economic Dashboard</h1>
+                        <p class="text-sm text-gray-400">Comprehensive testing interface for economic endpoints</p>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <div v-if="!isAuthenticated" class="flex space-x-2">
+                            <button @click="showAuthModal = true" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded">
+                                Login / Register
+                            </button>
+                        </div>
+                        <div v-else class="flex items-center space-x-4">
+                            <span class="text-sm text-gray-400">{{ userEmail }}</span>
+                            <button @click="logout" class="px-4 py-2 bg-red-600 hover:bg-red-700 rounded text-sm">
+                                Logout
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <div class="container mx-auto px-4 py-6">
+            <!-- Tab Navigation -->
+            <div class="flex space-x-1 mb-6 overflow-x-auto">
+                <button v-for="tab in tabs" :key="tab.id"
+                        @click="activeTab = tab.id"
+                        :class="['px-4 py-2 rounded-t font-medium whitespace-nowrap',
+                                 activeTab === tab.id ? 'bg-gray-800 text-blue-400' : 'bg-gray-800/50 text-gray-400 hover:text-gray-300']">
+                    {{ tab.name }}
+                </button>
+            </div>
+
+            <!-- Authentication Warning -->
+            <div v-if="!isAuthenticated" class="bg-yellow-900/30 border border-yellow-700 rounded p-4 mb-6">
+                <p class="text-yellow-400">
+                    Please login or register to access economic endpoints. Most operations require authentication.
+                </p>
+            </div>
+
+            <!-- Tab Content -->
+            <div class="bg-gray-800 rounded-b rounded-tr p-6">
+                <!-- Auctions Tab -->
+                <div v-if="activeTab === 'auctions'" class="space-y-6">
+                    <h2 class="text-xl font-bold text-blue-400 mb-4">Auction Management</h2>
+
+                    <!-- Create Auction -->
+                    <div class="bg-gray-900 rounded p-4">
+                        <h3 class="text-lg font-semibold mb-3">Create Auction</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <input v-model="auction.taskId" placeholder="Task ID" class="px-3 py-2 bg-gray-700 rounded" />
+                            <input v-model.number="auction.budget" type="number" step="0.01" placeholder="Budget" class="px-3 py-2 bg-gray-700 rounded" />
+                            <input v-model.number="auction.duration" type="number" placeholder="Duration (minutes)" class="px-3 py-2 bg-gray-700 rounded" />
+                            <select v-model="auction.priority" class="px-3 py-2 bg-gray-700 rounded">
+                                <option value="low">Low Priority</option>
+                                <option value="normal">Normal Priority</option>
+                                <option value="high">High Priority</option>
+                            </select>
+                        </div>
+                        <button @click="createAuction" :disabled="!isAuthenticated"
+                                class="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded disabled:opacity-50">
+                            Create Auction
+                        </button>
+                    </div>
+
+                    <!-- Submit Bid -->
+                    <div class="bg-gray-900 rounded p-4">
+                        <h3 class="text-lg font-semibold mb-3">Submit Bid</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <input v-model="bid.auctionId" placeholder="Auction ID" class="px-3 py-2 bg-gray-700 rounded" />
+                            <input v-model="bid.agentId" placeholder="Agent ID" class="px-3 py-2 bg-gray-700 rounded" />
+                            <input v-model.number="bid.price" type="number" step="0.01" placeholder="Bid Price" class="px-3 py-2 bg-gray-700 rounded" />
+                            <input v-model.number="bid.estimatedTime" type="number" placeholder="Estimated Time (minutes)" class="px-3 py-2 bg-gray-700 rounded" />
+                        </div>
+                        <button @click="submitBid" :disabled="!isAuthenticated"
+                                class="mt-4 px-4 py-2 bg-green-600 hover:bg-green-700 rounded disabled:opacity-50">
+                            Submit Bid
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Payment Channels Tab -->
+                <div v-if="activeTab === 'payments'" class="space-y-6">
+                    <h2 class="text-xl font-bold text-blue-400 mb-4">Payment Channel Management</h2>
+
+                    <!-- Open Payment Channel -->
+                    <div class="bg-gray-900 rounded p-4">
+                        <h3 class="text-lg font-semibold mb-3">Open Payment Channel</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <input v-model="payment.participantId" placeholder="Participant ID" class="px-3 py-2 bg-gray-700 rounded" />
+                            <input v-model.number="payment.initialDeposit" type="number" step="0.01" placeholder="Initial Deposit" class="px-3 py-2 bg-gray-700 rounded" />
+                            <input v-model.number="payment.timeout" type="number" placeholder="Timeout (minutes)" class="px-3 py-2 bg-gray-700 rounded" />
+                        </div>
+                        <button @click="openPaymentChannel" :disabled="!isAuthenticated"
+                                class="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded disabled:opacity-50">
+                            Open Channel
+                        </button>
+                    </div>
+
+                    <!-- Settle Payment Channel -->
+                    <div class="bg-gray-900 rounded p-4">
+                        <h3 class="text-lg font-semibold mb-3">Settle Payment Channel</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <input v-model="settlement.channelId" placeholder="Channel ID" class="px-3 py-2 bg-gray-700 rounded" />
+                            <input v-model.number="settlement.finalBalance1" type="number" step="0.01" placeholder="Final Balance 1" class="px-3 py-2 bg-gray-700 rounded" />
+                            <input v-model.number="settlement.finalBalance2" type="number" step="0.01" placeholder="Final Balance 2" class="px-3 py-2 bg-gray-700 rounded" />
+                        </div>
+                        <button @click="settlePaymentChannel" :disabled="!isAuthenticated"
+                                class="mt-4 px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded disabled:opacity-50">
+                            Settle Channel
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Escrow Tab -->
+                <div v-if="activeTab === 'escrow'" class="space-y-6">
+                    <h2 class="text-xl font-bold text-blue-400 mb-4">Escrow Management</h2>
+
+                    <!-- Create Escrow -->
+                    <div class="bg-gray-900 rounded p-4">
+                        <h3 class="text-lg font-semibold mb-3">Create Escrow</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <input v-model="escrow.taskId" placeholder="Task ID" class="px-3 py-2 bg-gray-700 rounded" />
+                            <input v-model="escrow.payeeId" placeholder="Payee ID" class="px-3 py-2 bg-gray-700 rounded" />
+                            <input v-model.number="escrow.amount" type="number" step="0.01" placeholder="Amount" class="px-3 py-2 bg-gray-700 rounded" />
+                            <input v-model.number="escrow.expirationMinutes" type="number" placeholder="Expiration (minutes)" class="px-3 py-2 bg-gray-700 rounded" />
+                            <input v-model.number="escrow.autoReleaseMinutes" type="number" placeholder="Auto-Release (minutes, optional)" class="px-3 py-2 bg-gray-700 rounded" />
+                            <input v-model="escrow.conditions" placeholder="Conditions (optional)" class="px-3 py-2 bg-gray-700 rounded" />
+                        </div>
+                        <button @click="createEscrow" :disabled="!isAuthenticated"
+                                class="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded disabled:opacity-50">
+                            Create Escrow
+                        </button>
+                    </div>
+
+                    <!-- Escrow Actions -->
+                    <div class="bg-gray-900 rounded p-4">
+                        <h3 class="text-lg font-semibold mb-3">Escrow Actions</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <input v-model="escrowAction.escrowId" placeholder="Escrow ID" class="px-3 py-2 bg-gray-700 rounded col-span-2" />
+                            <input v-model="escrowAction.signature" placeholder="Payment Signature (for fund)" class="px-3 py-2 bg-gray-700 rounded col-span-2" />
+                        </div>
+                        <div class="mt-4 flex flex-wrap gap-2">
+                            <button @click="getEscrow" :disabled="!isAuthenticated"
+                                    class="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded disabled:opacity-50">
+                                Get Details
+                            </button>
+                            <button @click="fundEscrow" :disabled="!isAuthenticated"
+                                    class="px-4 py-2 bg-green-600 hover:bg-green-700 rounded disabled:opacity-50">
+                                Fund Escrow
+                            </button>
+                            <button @click="releaseEscrow" :disabled="!isAuthenticated"
+                                    class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded disabled:opacity-50">
+                                Release Funds
+                            </button>
+                            <button @click="refundEscrow" :disabled="!isAuthenticated"
+                                    class="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 rounded disabled:opacity-50">
+                                Refund
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Escrow List -->
+                    <div v-if="escrows.length > 0" class="bg-gray-900 rounded p-4">
+                        <h3 class="text-lg font-semibold mb-3">Recent Escrows</h3>
+                        <div class="space-y-2">
+                            <div v-for="e in escrows" :key="e.escrow_id"
+                                 class="p-3 bg-gray-800 rounded flex justify-between items-center">
+                                <div>
+                                    <p class="font-mono text-sm">{{ e.escrow_id }}</p>
+                                    <p class="text-sm text-gray-400">Amount: {{ e.amount }} | Status: {{ e.status }}</p>
+                                </div>
+                                <span :class="['px-2 py-1 rounded text-xs',
+                                              e.status === 'released' ? 'bg-green-900 text-green-300' :
+                                              e.status === 'funded' ? 'bg-blue-900 text-blue-300' :
+                                              e.status === 'disputed' ? 'bg-red-900 text-red-300' :
+                                              'bg-gray-700 text-gray-300']">
+                                    {{ e.status }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Disputes Tab -->
+                <div v-if="activeTab === 'disputes'" class="space-y-6">
+                    <h2 class="text-xl font-bold text-blue-400 mb-4">Dispute Resolution</h2>
+
+                    <!-- Open Dispute -->
+                    <div class="bg-gray-900 rounded p-4">
+                        <h3 class="text-lg font-semibold mb-3">Open Dispute</h3>
+                        <div class="space-y-4">
+                            <input v-model="dispute.escrowId" placeholder="Escrow ID" class="w-full px-3 py-2 bg-gray-700 rounded" />
+                            <textarea v-model="dispute.reason" placeholder="Dispute Reason"
+                                      class="w-full px-3 py-2 bg-gray-700 rounded h-24"></textarea>
+                        </div>
+                        <button @click="openDispute" :disabled="!isAuthenticated"
+                                class="mt-4 px-4 py-2 bg-red-600 hover:bg-red-700 rounded disabled:opacity-50">
+                            Open Dispute
+                        </button>
+                    </div>
+
+                    <!-- Submit Evidence -->
+                    <div class="bg-gray-900 rounded p-4">
+                        <h3 class="text-lg font-semibold mb-3">Submit Evidence</h3>
+                        <div class="space-y-4">
+                            <input v-model="evidence.disputeId" placeholder="Dispute ID" class="w-full px-3 py-2 bg-gray-700 rounded" />
+                            <select v-model="evidence.type" class="w-full px-3 py-2 bg-gray-700 rounded">
+                                <option value="text">Text Evidence</option>
+                                <option value="file">File Evidence</option>
+                                <option value="screenshot">Screenshot</option>
+                                <option value="log">Log Evidence</option>
+                            </select>
+                            <textarea v-model="evidence.content" placeholder="Evidence Content"
+                                      class="w-full px-3 py-2 bg-gray-700 rounded h-24"></textarea>
+                            <input v-model="evidence.fileUrl" placeholder="File URL (optional)"
+                                   class="w-full px-3 py-2 bg-gray-700 rounded" />
+                        </div>
+                        <button @click="submitEvidence" :disabled="!isAuthenticated"
+                                class="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded disabled:opacity-50">
+                            Submit Evidence
+                        </button>
+                    </div>
+
+                    <!-- Resolve Dispute -->
+                    <div class="bg-gray-900 rounded p-4">
+                        <h3 class="text-lg font-semibold mb-3">Resolve Dispute</h3>
+                        <div class="space-y-4">
+                            <input v-model="resolution.disputeId" placeholder="Dispute ID" class="w-full px-3 py-2 bg-gray-700 rounded" />
+                            <select v-model="resolution.outcome" class="w-full px-3 py-2 bg-gray-700 rounded">
+                                <option value="release">Release to Payee</option>
+                                <option value="refund">Refund to Payer</option>
+                                <option value="split">Split Funds</option>
+                            </select>
+                            <textarea v-model="resolution.resolutionText" placeholder="Resolution Details"
+                                      class="w-full px-3 py-2 bg-gray-700 rounded h-24"></textarea>
+                            <input v-model="resolution.reviewerId" placeholder="Reviewer ID"
+                                   class="w-full px-3 py-2 bg-gray-700 rounded" />
+                        </div>
+                        <button @click="resolveDispute" :disabled="!isAuthenticated"
+                                class="mt-4 px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded disabled:opacity-50">
+                            Resolve Dispute
+                        </button>
+                    </div>
+
+                    <!-- Get Dispute Details -->
+                    <div class="bg-gray-900 rounded p-4">
+                        <h3 class="text-lg font-semibold mb-3">Get Dispute Details</h3>
+                        <div class="flex gap-2">
+                            <input v-model="disputeQuery.id" placeholder="Dispute ID"
+                                   class="flex-1 px-3 py-2 bg-gray-700 rounded" />
+                            <button @click="getDispute" :disabled="!isAuthenticated"
+                                    class="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded disabled:opacity-50">
+                                Get Details
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Reputation Tab -->
+                <div v-if="activeTab === 'reputation'" class="space-y-6">
+                    <h2 class="text-xl font-bold text-blue-400 mb-4">Reputation Management</h2>
+
+                    <!-- Get Reputation -->
+                    <div class="bg-gray-900 rounded p-4">
+                        <h3 class="text-lg font-semibold mb-3">Get Agent Reputation</h3>
+                        <div class="flex gap-2">
+                            <input v-model="reputationQuery.agentId" placeholder="Agent ID"
+                                   class="flex-1 px-3 py-2 bg-gray-700 rounded" />
+                            <button @click="getReputation" :disabled="!isAuthenticated"
+                                    class="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded disabled:opacity-50">
+                                Get Reputation
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Update Reputation -->
+                    <div class="bg-gray-900 rounded p-4">
+                        <h3 class="text-lg font-semibold mb-3">Update Agent Reputation</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <input v-model="reputationUpdate.agentId" placeholder="Agent ID"
+                                   class="px-3 py-2 bg-gray-700 rounded" />
+                            <input v-model="reputationUpdate.taskId" placeholder="Task ID"
+                                   class="px-3 py-2 bg-gray-700 rounded" />
+                            <input v-model.number="reputationUpdate.score" type="number" min="0" max="5" step="0.1"
+                                   placeholder="Score (0-5)" class="px-3 py-2 bg-gray-700 rounded" />
+                            <select v-model="reputationUpdate.outcome" class="px-3 py-2 bg-gray-700 rounded">
+                                <option value="success">Success</option>
+                                <option value="failure">Failure</option>
+                                <option value="partial">Partial</option>
+                            </select>
+                            <input v-model.number="reputationUpdate.responseTime" type="number"
+                                   placeholder="Response Time (seconds)" class="px-3 py-2 bg-gray-700 rounded" />
+                            <textarea v-model="reputationUpdate.feedback" placeholder="Feedback (optional)"
+                                      class="px-3 py-2 bg-gray-700 rounded col-span-2"></textarea>
+                        </div>
+                        <button @click="updateReputation" :disabled="!isAuthenticated"
+                                class="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded disabled:opacity-50">
+                            Update Reputation
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Meta-Orchestrator Tab -->
+                <div v-if="activeTab === 'orchestrator'" class="space-y-6">
+                    <h2 class="text-xl font-bold text-blue-400 mb-4">Meta-Orchestrator</h2>
+
+                    <!-- Delegate Task -->
+                    <div class="bg-gray-900 rounded p-4">
+                        <h3 class="text-lg font-semibold mb-3">Delegate Complex Task</h3>
+                        <div class="space-y-4">
+                            <input v-model="orchestrator.taskId" placeholder="Task ID"
+                                   class="w-full px-3 py-2 bg-gray-700 rounded" />
+                            <textarea v-model="orchestrator.query" placeholder="Task Query/Description"
+                                      class="w-full px-3 py-2 bg-gray-700 rounded h-24"></textarea>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <input v-model.number="orchestrator.budget" type="number" step="0.01"
+                                       placeholder="Budget" class="px-3 py-2 bg-gray-700 rounded" />
+                                <select v-model="orchestrator.priority" class="px-3 py-2 bg-gray-700 rounded">
+                                    <option value="low">Low Priority</option>
+                                    <option value="normal">Normal Priority</option>
+                                    <option value="high">High Priority</option>
+                                </select>
+                            </div>
+                            <input v-model="orchestrator.capabilities" placeholder="Required Capabilities (comma-separated)"
+                                   class="w-full px-3 py-2 bg-gray-700 rounded" />
+                        </div>
+                        <button @click="delegateTask" :disabled="!isAuthenticated"
+                                class="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded disabled:opacity-50">
+                            Delegate Task
+                        </button>
+                    </div>
+
+                    <!-- Get Orchestration Status -->
+                    <div class="bg-gray-900 rounded p-4">
+                        <h3 class="text-lg font-semibold mb-3">Get Orchestration Status</h3>
+                        <div class="flex gap-2">
+                            <input v-model="orchestratorQuery.taskId" placeholder="Task ID"
+                                   class="flex-1 px-3 py-2 bg-gray-700 rounded" />
+                            <button @click="getOrchestrationStatus" :disabled="!isAuthenticated"
+                                    class="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded disabled:opacity-50">
+                                Get Status
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Response Display -->
+                <div v-if="lastResponse" class="mt-6 bg-gray-900 rounded p-4">
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="text-lg font-semibold">Last Response</h3>
+                        <span :class="['px-2 py-1 rounded text-xs',
+                                      lastResponseStatus === 'success' ? 'bg-green-900 text-green-300' :
+                                      lastResponseStatus === 'error' ? 'bg-red-900 text-red-300' :
+                                      'bg-blue-900 text-blue-300']">
+                            {{ lastResponseStatus }}
+                        </span>
+                    </div>
+                    <pre class="bg-black p-3 rounded overflow-x-auto text-sm">{{ JSON.stringify(lastResponse, null, 2) }}</pre>
+                </div>
+            </div>
+        </div>
+
+        <!-- Auth Modal -->
+        <div v-if="showAuthModal" class="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+            <div class="bg-gray-800 rounded-lg p-6 max-w-md w-full">
+                <h2 class="text-xl font-bold mb-4">{{ authMode === 'login' ? 'Login' : 'Register' }}</h2>
+                <div class="space-y-4">
+                    <input v-model="authForm.email" type="email" placeholder="Email"
+                           class="w-full px-3 py-2 bg-gray-700 rounded" />
+                    <input v-model="authForm.password" type="password" placeholder="Password"
+                           class="w-full px-3 py-2 bg-gray-700 rounded" />
+                    <input v-if="authMode === 'register'" v-model="authForm.fullName"
+                           placeholder="Full Name" class="w-full px-3 py-2 bg-gray-700 rounded" />
+                </div>
+                <div class="mt-4 flex gap-2">
+                    <button @click="authenticate"
+                            class="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded">
+                        {{ authMode === 'login' ? 'Login' : 'Register' }}
+                    </button>
+                    <button @click="authMode = authMode === 'login' ? 'register' : 'login'"
+                            class="flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded">
+                        {{ authMode === 'login' ? 'Register' : 'Login' }}
+                    </button>
+                </div>
+                <button @click="showAuthModal = false"
+                        class="w-full mt-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded">
+                    Cancel
+                </button>
+                <p v-if="authError" class="mt-2 text-red-400 text-sm">{{ authError }}</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp } = Vue;
+
+        createApp({
+            data() {
+                return {
+                    apiUrl: window.location.hostname === 'localhost' ?
+                            'http://localhost:8080' :
+                            'https://zerostate-api.fly.dev',
+                    activeTab: 'auctions',
+                    tabs: [
+                        { id: 'auctions', name: 'Auctions' },
+                        { id: 'payments', name: 'Payment Channels' },
+                        { id: 'escrow', name: 'Escrow' },
+                        { id: 'disputes', name: 'Disputes' },
+                        { id: 'reputation', name: 'Reputation' },
+                        { id: 'orchestrator', name: 'Meta-Orchestrator' }
+                    ],
+
+                    // Auth
+                    showAuthModal: false,
+                    authMode: 'login',
+                    authForm: { email: '', password: '', fullName: '' },
+                    authError: '',
+                    isAuthenticated: false,
+                    token: localStorage.getItem('token') || '',
+                    userEmail: localStorage.getItem('userEmail') || '',
+                    userId: localStorage.getItem('userId') || '',
+
+                    // Auction
+                    auction: { taskId: '', budget: 100, duration: 60, priority: 'normal' },
+                    bid: { auctionId: '', agentId: '', price: 0, estimatedTime: 30 },
+
+                    // Payment
+                    payment: { participantId: '', initialDeposit: 100, timeout: 3600 },
+                    settlement: { channelId: '', finalBalance1: 0, finalBalance2: 0 },
+
+                    // Escrow
+                    escrow: { taskId: '', payeeId: '', amount: 100, expirationMinutes: 60, autoReleaseMinutes: null, conditions: '' },
+                    escrowAction: { escrowId: '', signature: '' },
+                    escrows: [],
+
+                    // Disputes
+                    dispute: { escrowId: '', reason: '' },
+                    evidence: { disputeId: '', type: 'text', content: '', fileUrl: '' },
+                    resolution: { disputeId: '', outcome: 'release', resolutionText: '', reviewerId: '' },
+                    disputeQuery: { id: '' },
+
+                    // Reputation
+                    reputationQuery: { agentId: '' },
+                    reputationUpdate: { agentId: '', taskId: '', score: 5, outcome: 'success', responseTime: 0, feedback: '' },
+
+                    // Orchestrator
+                    orchestrator: { taskId: '', query: '', budget: 100, priority: 'normal', capabilities: '' },
+                    orchestratorQuery: { taskId: '' },
+
+                    // Response
+                    lastResponse: null,
+                    lastResponseStatus: 'info'
+                }
+            },
+
+            mounted() {
+                if (this.token) {
+                    this.isAuthenticated = true;
+                }
+            },
+
+            methods: {
+                async apiRequest(method, endpoint, data = null) {
+                    const config = {
+                        method,
+                        url: `${this.apiUrl}${endpoint}`,
+                        headers: {}
+                    };
+
+                    if (this.token) {
+                        config.headers['Authorization'] = `Bearer ${this.token}`;
+                    }
+
+                    if (data) {
+                        config.headers['Content-Type'] = 'application/json';
+                        config.data = data;
+                    }
+
+                    try {
+                        const response = await axios(config);
+                        this.lastResponse = response.data;
+                        this.lastResponseStatus = 'success';
+                        return response.data;
+                    } catch (error) {
+                        this.lastResponse = error.response?.data || { error: error.message };
+                        this.lastResponseStatus = 'error';
+                        throw error;
+                    }
+                },
+
+                async authenticate() {
+                    this.authError = '';
+                    const endpoint = this.authMode === 'login' ? '/api/v1/users/login' : '/api/v1/users/register';
+                    const payload = this.authMode === 'login' ?
+                        { email: this.authForm.email, password: this.authForm.password } :
+                        { email: this.authForm.email, password: this.authForm.password, full_name: this.authForm.fullName };
+
+                    try {
+                        const data = await this.apiRequest('POST', endpoint, payload);
+                        this.token = data.token;
+                        this.userEmail = data.user.email;
+                        this.userId = data.user.id;
+                        this.isAuthenticated = true;
+
+                        localStorage.setItem('token', this.token);
+                        localStorage.setItem('userEmail', this.userEmail);
+                        localStorage.setItem('userId', this.userId);
+
+                        this.showAuthModal = false;
+                        this.authForm = { email: '', password: '', fullName: '' };
+                    } catch (error) {
+                        this.authError = error.response?.data?.message || 'Authentication failed';
+                    }
+                },
+
+                logout() {
+                    this.token = '';
+                    this.userEmail = '';
+                    this.userId = '';
+                    this.isAuthenticated = false;
+                    localStorage.removeItem('token');
+                    localStorage.removeItem('userEmail');
+                    localStorage.removeItem('userId');
+                },
+
+                // Auction methods
+                async createAuction() {
+                    await this.apiRequest('POST', '/api/v1/economic/auctions', {
+                        task_id: this.auction.taskId,
+                        budget: this.auction.budget,
+                        duration_minutes: this.auction.duration,
+                        priority: this.auction.priority
+                    });
+                },
+
+                async submitBid() {
+                    await this.apiRequest('POST', `/api/v1/economic/auctions/${this.bid.auctionId}/bids`, {
+                        agent_id: this.bid.agentId,
+                        price: this.bid.price,
+                        estimated_time: this.bid.estimatedTime
+                    });
+                },
+
+                // Payment methods
+                async openPaymentChannel() {
+                    await this.apiRequest('POST', '/api/v1/economic/payment-channels', {
+                        participant_id: this.payment.participantId,
+                        initial_deposit: this.payment.initialDeposit,
+                        timeout_seconds: this.payment.timeout
+                    });
+                },
+
+                async settlePaymentChannel() {
+                    await this.apiRequest('POST', `/api/v1/economic/payment-channels/${this.settlement.channelId}/settle`, {
+                        final_balance_1: this.settlement.finalBalance1,
+                        final_balance_2: this.settlement.finalBalance2
+                    });
+                },
+
+                // Escrow methods
+                async createEscrow() {
+                    const payload = {
+                        task_id: this.escrow.taskId,
+                        payee_id: this.escrow.payeeId,
+                        amount: this.escrow.amount,
+                        expiration_minutes: this.escrow.expirationMinutes
+                    };
+
+                    if (this.escrow.autoReleaseMinutes) {
+                        payload.auto_release_minutes = this.escrow.autoReleaseMinutes;
+                    }
+                    if (this.escrow.conditions) {
+                        payload.conditions = this.escrow.conditions;
+                    }
+
+                    const result = await this.apiRequest('POST', '/api/v1/economic/escrows', payload);
+                    this.escrows.unshift(result);
+                },
+
+                async getEscrow() {
+                    const result = await this.apiRequest('GET', `/api/v1/economic/escrows/${this.escrowAction.escrowId}`);
+                    const existingIndex = this.escrows.findIndex(e => e.escrow_id === this.escrowAction.escrowId);
+                    if (existingIndex >= 0) {
+                        this.escrows[existingIndex] = result;
+                    } else {
+                        this.escrows.unshift(result);
+                    }
+                },
+
+                async fundEscrow() {
+                    await this.apiRequest('POST', `/api/v1/economic/escrows/${this.escrowAction.escrowId}/fund`, {
+                        signature: this.escrowAction.signature || `sig-${Date.now()}`
+                    });
+                    await this.getEscrow();
+                },
+
+                async releaseEscrow() {
+                    await this.apiRequest('POST', `/api/v1/economic/escrows/${this.escrowAction.escrowId}/release`, {});
+                    await this.getEscrow();
+                },
+
+                async refundEscrow() {
+                    await this.apiRequest('POST', `/api/v1/economic/escrows/${this.escrowAction.escrowId}/refund`, {});
+                    await this.getEscrow();
+                },
+
+                // Dispute methods
+                async openDispute() {
+                    await this.apiRequest('POST', `/api/v1/economic/escrows/${this.dispute.escrowId}/dispute`, {
+                        reason: this.dispute.reason
+                    });
+                },
+
+                async getDispute() {
+                    await this.apiRequest('GET', `/api/v1/economic/disputes/${this.disputeQuery.id}`);
+                },
+
+                async submitEvidence() {
+                    const payload = {
+                        evidence_type: this.evidence.type,
+                        content: this.evidence.content
+                    };
+
+                    if (this.evidence.fileUrl) {
+                        payload.file_url = this.evidence.fileUrl;
+                    }
+
+                    await this.apiRequest('POST', `/api/v1/economic/disputes/${this.evidence.disputeId}/evidence`, payload);
+                },
+
+                async resolveDispute() {
+                    await this.apiRequest('POST', `/api/v1/economic/disputes/${this.resolution.disputeId}/resolve`, {
+                        outcome: this.resolution.outcome,
+                        resolution: this.resolution.resolutionText,
+                        reviewer_id: this.resolution.reviewerId || this.userId
+                    });
+                },
+
+                // Reputation methods
+                async getReputation() {
+                    await this.apiRequest('GET', `/api/v1/economic/reputation/${this.reputationQuery.agentId}`);
+                },
+
+                async updateReputation() {
+                    const payload = {
+                        agent_id: this.reputationUpdate.agentId,
+                        task_id: this.reputationUpdate.taskId,
+                        score: this.reputationUpdate.score,
+                        outcome: this.reputationUpdate.outcome,
+                        response_time_seconds: this.reputationUpdate.responseTime
+                    };
+
+                    if (this.reputationUpdate.feedback) {
+                        payload.feedback = this.reputationUpdate.feedback;
+                    }
+
+                    await this.apiRequest('POST', '/api/v1/economic/reputation', payload);
+                },
+
+                // Orchestrator methods
+                async delegateTask() {
+                    const caps = this.orchestrator.capabilities.split(',').map(c => c.trim()).filter(c => c);
+
+                    await this.apiRequest('POST', '/api/v1/economic/meta-orchestrator/delegate', {
+                        task_id: this.orchestrator.taskId,
+                        query: this.orchestrator.query,
+                        capabilities: caps,
+                        budget: this.orchestrator.budget,
+                        priority: this.orchestrator.priority
+                    });
+                },
+
+                async getOrchestrationStatus() {
+                    await this.apiRequest('GET', `/api/v1/economic/meta-orchestrator/status/${this.orchestratorQuery.taskId}`);
+                }
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
