@@ -194,6 +194,7 @@ func (s *Server) setupRoutes() {
 				agents.GET("/search", s.handlers.SearchAgents)
 
 				// Agent WASM binary upload and management
+				agents.POST("/upload", s.handlers.UploadAgentSimple)  // Simplified upload endpoint (auto-generates ID)
 				agents.POST("/:id/binary", s.handlers.UploadAgent)
 				agents.GET("/:id/binary", s.handlers.GetAgentBinary)
 				agents.DELETE("/:id/binary", s.handlers.DeleteAgentBinary)

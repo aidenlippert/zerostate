@@ -44,6 +44,22 @@ type UploadAgentResponse struct {
 	Message    string `json:"message"`
 }
 
+// UploadAgentSimple handles WASM agent binary upload without requiring agent ID in URL
+// This is a convenience endpoint that auto-generates an agent ID
+func (h *Handlers) UploadAgentSimple(c *gin.Context) {
+	// Generate a new agent ID
+	agentID := uuid.New().String()
+
+	// Set the ID in the context params so UploadAgent can find it
+	c.Params = append(c.Params, gin.Param{
+		Key:   "id",
+		Value: agentID,
+	})
+
+	// Delegate to the existing UploadAgent handler
+	h.UploadAgent(c)
+}
+
 // UploadAgent handles WASM agent binary upload
 func (h *Handlers) UploadAgent(c *gin.Context) {
 	logger := h.logger.With(zap.String("handler", "UploadAgent"))
