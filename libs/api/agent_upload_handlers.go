@@ -223,6 +223,8 @@ func (h *Handlers) UploadAgent(c *gin.Context) {
 		CreatedAt:      now,
 		UpdatedAt:      now,
 		Metadata:       json.RawMessage(`{}`),
+		WasmHash:       fileHash,
+		S3Key:          fmt.Sprintf("agents/%s/%s.wasm", agentID, fileHash),
 	}
 
 	if h.db != nil {
