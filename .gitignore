@@ -48,3 +48,7 @@ temp/
 
 # Logs
 *.log
+
+# Rust examples build artifacts
+examples/agents/**/target/
+examples/**/target/

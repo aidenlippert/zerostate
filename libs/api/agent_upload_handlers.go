@@ -192,47 +192,80 @@ func (h *Handlers) UploadAgent(c *gin.Context) {
 		return
 	}
 
-	// Store agent metadata in database
+	// Store agent metadata in database (ensure JSON never null for JSONB column)
 	capabilitiesJSON, err := json.Marshal(metadata.Capabilities)
 	if err != nil {
-		logger.Error("failed to marshal capabilities",
-			zap.Error(err),
-		)
+		logger.Error("failed to marshal capabilities", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "metadata error",
 			"message": "failed to process capabilities",
 		})
 		return
 	}
+	if len(capabilitiesJSON) == 0 || string(capabilitiesJSON) == "null" {
+		capabilitiesJSON = json.RawMessage(`[]`)
+	}
+
+	// Build metadata blob including wasm hash, s3 key, version & price for future pricing model
+	metadataMap := map[string]interface{}{
+		"wasm_hash": fileHash,
+		"s3_key":    fmt.Sprintf("agents/%s/%s.wasm", agentID, fileHash),
+		"version":   metadata.Version,
+		"price":     metadata.Price,
+	}
+	metadataJSON, err := json.Marshal(metadataMap)
+	if err != nil {
+		logger.Error("failed to marshal metadata", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "metadata error",
+			"message": "failed to process agent metadata",
+		})
+		return
+	}
+	if len(metadataJSON) == 0 || string(metadataJSON) == "null" {
+		metadataJSON = json.RawMessage(`{}`)
+	}
 
 	now := time.Now()
-
-	// Convert string agent ID to uuid.UUID
-	agentUUID, _ := uuid.Parse(agentID)
+	agentUUID, parseErr := uuid.Parse(agentID)
+	if parseErr != nil {
+		logger.Error("failed to parse generated agent UUID", zap.Error(parseErr))
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "internal error",
+			"message": "invalid generated agent id",
+		})
+		return
+	}
 
 	agent := &database.Agent{
-		ID:             agentUUID,
-		DID:            agentID,
-		Name:           metadata.Name,
-		Description:    sql.NullString{String: metadata.Description, Valid: true},
-		Capabilities:   json.RawMessage(capabilitiesJSON),
-		Status:         database.AgentStatus("active"),
+		ID:           agentUUID,
+		DID:          agentID,
+		Name:         metadata.Name,
+		Description:  sql.NullString{String: metadata.Description, Valid: metadata.Description != ""},
+		Capabilities: json.RawMessage(capabilitiesJSON),
+		Status:       database.AgentStatusOnline, // align with defined enum
+		CreatedAt:    now,
+		UpdatedAt:    now,
+		Metadata:     json.RawMessage(metadataJSON),
+		// Backward-compat / computed (not persisted by CreateAgent):
 		Price:          metadata.Price,
 		TasksCompleted: 0,
 		Rating:         0.0,
-		CreatedAt:      now,
-		UpdatedAt:      now,
-		Metadata:       json.RawMessage(`{}`),
-		WasmHash:       fileHash,
-		S3Key:          fmt.Sprintf("agents/%s/%s.wasm", agentID, fileHash),
 	}
 
 	if h.db != nil {
-		err = h.db.CreateAgent(agent)
-		if err != nil {
+		logger.Info("attempting to persist agent", 
+			zap.String("agent_id", agentID),
+			zap.Int("capabilities_count", len(metadata.Capabilities)),
+			zap.String("wasm_hash", fileHash),
+			zap.String("s3_key", metadataMap["s3_key"].(string)),
+			zap.Float64("price", metadata.Price),
+		)
+		if err = h.db.CreateAgent(agent); err != nil {
 			logger.Error("failed to store agent in database",
 				zap.Error(err),
 				zap.String("agent_id", agentID),
+				zap.String("wasm_hash", fileHash),
 			)
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error":   "database error",
@@ -240,10 +273,7 @@ func (h *Handlers) UploadAgent(c *gin.Context) {
 			})
 			return
 		}
-		logger.Info("agent metadata stored in database",
-			zap.String("agent_id", agentID),
-			zap.String("user_id", userID.(string)),
-		)
+		logger.Info("agent metadata stored", zap.String("agent_id", agentID), zap.String("user_id", userID.(string)))
 	} else {
 		logger.Warn("database not configured, agent metadata not persisted")
 	}
