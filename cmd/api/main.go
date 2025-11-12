@@ -18,8 +18,8 @@ import (
 	"github.com/aidenlippert/zerostate/libs/search"
 	"github.com/aidenlippert/zerostate/libs/storage"
 	"github.com/aidenlippert/zerostate/libs/websocket"
-	"github.com/libp2p/go-libp2p"
 	_ "github.com/lib/pq" // PostgreSQL driver
+	"github.com/libp2p/go-libp2p"
 	"go.uber.org/zap"
 )
 
@@ -33,9 +33,13 @@ func main() {
 	)
 	flag.Parse()
 
-	// Initialize logger
+	// Initialize logger (allow LOG_LEVEL env override)
 	var logger *zap.Logger
 	var err error
+	logLevel := os.Getenv("LOG_LEVEL")
+	if logLevel == "debug" {
+		*debug = true
+	}
 	if *debug {
 		logger, err = zap.NewDevelopment()
 	} else {
@@ -52,6 +56,7 @@ func main() {
 		zap.Int("port", *port),
 		zap.Int("workers", *workers),
 		zap.Bool("debug", *debug),
+		zap.String("log_level_env", logLevel),
 	)
 
 	// Create context for graceful shutdown

@@ -3,6 +3,7 @@ package api
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"time"
 
@@ -10,6 +11,8 @@ import (
 	"github.com/aidenlippert/zerostate/libs/database"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
+	"go.uber.org/zap"
 )
 
 // RegisterUserRequest represents a user registration request
@@ -49,16 +52,18 @@ func (h *Handlers) RegisterUser(c *gin.Context) {
 		return
 	}
 
-	// Check if user already exists
+	// Check if user already exists (distinguish not found vs other errors)
 	existingUser, err := h.db.GetUserByEmail(req.Email)
-	if err != nil && err.Error() != "record not found" {
-		// Real database error (not just "not found")
-		h.logger.Error("failed to check existing user: " + err.Error())
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
-		return
-	}
-
-	if existingUser != nil {
+	if err != nil {
+		if errors.Is(err, database.ErrNotFound) {
+			// OK - user does not exist
+			h.logger.Debug("email available", zap.String("email", req.Email))
+		} else {
+			h.logger.Error("user lookup failed", zap.String("email", req.Email), zap.Error(err))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+			return
+		}
+	} else if existingUser != nil {
 		c.JSON(http.StatusConflict, gin.H{"error": "user with this email already exists"})
 		return
 	}
@@ -86,11 +91,27 @@ func (h *Handlers) RegisterUser(c *gin.Context) {
 	// Use UserRepository to create user
 	userRepo := database.NewUserRepository(h.db)
 	if err := userRepo.Create(c.Request.Context(), user); err != nil {
-		h.logger.Error("failed to create user: " + err.Error())
+		// Surface pq error details when possible
+		var pqErr *pq.Error
+		if errors.Is(err, database.ErrAlreadyExists) {
+			c.JSON(http.StatusConflict, gin.H{"error": "user with this email already exists"})
+			return
+		} else if errors.As(err, &pqErr) {
+			h.logger.Error(
+				"failed to create user (pq)",
+				zap.String("code", string(pqErr.Code)),
+				zap.String("constraint", pqErr.Constraint),
+				zap.String("detail", pqErr.Detail),
+				zap.String("email", req.Email),
+			)
+		} else {
+			h.logger.Error("failed to create user", zap.Error(err), zap.String("email", req.Email))
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
 
+	h.logger.Info("user registered", zap.String("user_id", user.ID.String()), zap.String("did", user.DID), zap.String("email", req.Email))
 	// Generate JWT token
 	jwtService := auth.NewJWTService(auth.DefaultJWTConfig())
 	tokenPair, err := jwtService.GenerateTokenPair(user.ID, user.DID, user.Email.String, false)
