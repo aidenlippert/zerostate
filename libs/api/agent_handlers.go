@@ -13,7 +13,6 @@ import (
 
 	"github.com/aidenlippert/zerostate/libs/database"
 	"github.com/aidenlippert/zerostate/libs/identity"
-	"github.com/aidenlippert/zerostate/libs/search"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/attribute"
@@ -224,20 +223,20 @@ func (h *Handlers) RegisterAgent(c *gin.Context) {
 	// Update HNSW index with agent capabilities
 	indexUpdated := false
 	if h.hnsw != nil {
-		// Create embedding for capabilities
-		embeddingGen := search.NewEmbedding(128)
-		vector := embeddingGen.EncodeCapabilities(req.Capabilities, nil)
-
-		// Add to HNSW index
-		idx := h.hnsw.Add(vector, agentCard)
-		if idx >= 0 {
-			indexUpdated = true
-			logger.Info("HNSW index updated",
-				zap.String("agent_id", h.signer.DID()),
-				zap.Int("index_id", idx),
-			)
+		// Convert agent card to JSON for indexing
+		cardJSON, err := json.Marshal(agentCard)
+		if err != nil {
+			logger.Error("failed to marshal agent card for indexing", zap.Error(err))
 		} else {
-			logger.Error("failed to update HNSW index")
+			// Index the card
+			if err := h.hnsw.IndexCard(ctx, cardJSON); err != nil {
+				logger.Error("failed to update HNSW index", zap.Error(err))
+			} else {
+				indexUpdated = true
+				logger.Info("HNSW index updated",
+					zap.String("agent_id", h.signer.DID()),
+				)
+			}
 		}
 	}
 
@@ -298,7 +297,7 @@ func (h *Handlers) RegisterAgent(c *gin.Context) {
 			Capabilities: json.RawMessage(capabilitiesJSON),
 			PricingModel: sql.NullString{String: string(pricingJSON), Valid: true},
 			Status:       database.AgentStatusOnline, // Agent is online and available
-			MaxCapacity:  10,                             // Default capacity
+			MaxCapacity:  10,                         // Default capacity
 			CurrentLoad:  0,
 			CreatedAt:    now,
 			UpdatedAt:    now,

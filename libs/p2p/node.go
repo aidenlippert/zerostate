@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/aidenlippert/zerostate/libs/routing"
 	"github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
-	"github.com/aidenlippert/zerostate/libs/routing"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
@@ -373,6 +373,67 @@ func (n *Node) RequestDedup() *RequestDeduplicator {
 // BandwidthQoS returns the bandwidth QoS manager
 func (n *Node) BandwidthQoS() *BandwidthQoS {
 	return n.bandwidthQoS
+}
+
+// QTable returns the Q-routing table
+func (n *Node) QTable() *routing.QTable {
+	return n.qtable
+}
+
+// SelectBestPeer uses Q-learning to select the best peer from candidates
+// This is the core Q-routing integration
+func (n *Node) SelectBestPeer(ctx context.Context, candidates []peer.ID) (peer.ID, error) {
+	ctx, span := n.tracer.Start(ctx, "SelectBestPeer")
+	defer span.End()
+
+	if len(candidates) == 0 {
+		return "", fmt.Errorf("no candidate peers provided")
+	}
+
+	// Use Q-table to select best peer
+	bestPeer, ok := n.qtable.SelectBestPeer(candidates)
+	if !ok {
+		return "", fmt.Errorf("Q-table failed to select peer")
+	}
+
+	n.logger.Debug("selected best peer using Q-routing",
+		zap.String("peer_id", bestPeer.String()),
+		zap.Int("candidates", len(candidates)),
+	)
+
+	return bestPeer, nil
+}
+
+// UpdateRouteMetrics updates Q-values after a message is sent to a peer
+// Call this after every peer interaction to train the Q-table
+func (n *Node) UpdateRouteMetrics(peerID peer.ID, latency time.Duration, success bool, bytesTransferred int64) {
+	n.qtable.UpdateRoute(peerID, latency, success, bytesTransferred)
+
+	n.logger.Debug("updated Q-routing metrics",
+		zap.String("peer_id", peerID.String()),
+		zap.Duration("latency", latency),
+		zap.Bool("success", success),
+		zap.Int64("bytes", bytesTransferred),
+	)
+}
+
+// GetTopPeers returns the N best performing peers based on Q-scores
+func (n *Node) GetTopPeers(count int) []peer.ID {
+	return n.qtable.GetTopPeers(count)
+}
+
+// PruneStaleRoutes removes Q-table entries for peers we haven't seen recently
+func (n *Node) PruneStaleRoutes(maxAge time.Duration) int {
+	pruned := n.qtable.PruneStale(maxAge)
+	if pruned > 0 {
+		n.logger.Info("pruned stale routes", zap.Int("count", pruned))
+	}
+	return pruned
+}
+
+// GetRoutingStats returns Q-routing statistics
+func (n *Node) GetRoutingStats() map[string]interface{} {
+	return n.qtable.Stats()
 }
 
 // multiaddrsToStrings converts multiaddrs to strings

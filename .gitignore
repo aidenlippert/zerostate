@@ -49,6 +49,15 @@ temp/
 # Logs
 *.log
 
-# Rust examples build artifacts
+# Rust build artifacts
 examples/agents/**/target/
 examples/**/target/
+libs/**/target/
+agents/**/target/
+**/target/
+
+# Python virtual environments
+**/venv/
+**/__pycache__/
+api
+reference-runtime-v1/bin/

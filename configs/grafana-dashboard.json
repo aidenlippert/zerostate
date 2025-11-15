@@ -1,0 +1,608 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Ainur Protocol - Production Monitoring",
+    "description": "Comprehensive monitoring dashboard for Ainur Protocol orchestrator and blockchain",
+    "tags": ["ainur", "protocol", "orchestrator", "blockchain", "production"],
+    "timezone": "UTC",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "10s",
+    "schemaVersion": 30,
+    "version": 1,
+    "panels": [
+      {
+        "id": 1,
+        "title": "Service Status Overview",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "up{job=\"ainur-orchestrator\"}",
+            "legendFormat": "Orchestrator",
+            "refId": "A"
+          },
+          {
+            "expr": "ainur_blockchain_connection_status",
+            "legendFormat": "Blockchain",
+            "refId": "B"
+          },
+          {
+            "expr": "up{job=\"postgres-exporter\"}",
+            "legendFormat": "Database",
+            "refId": "C"
+          }
+        ],
+        "gridPos": {
+          "h": 4,
+          "w": 12,
+          "x": 0,
+          "y": 0
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "red",
+                  "value": 0
+                },
+                {
+                  "color": "green",
+                  "value": 1
+                }
+              ]
+            },
+            "mappings": [
+              {
+                "options": {
+                  "0": {
+                    "text": "DOWN"
+                  },
+                  "1": {
+                    "text": "UP"
+                  }
+                },
+                "type": "value"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "SLO Dashboard",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "ainur:api_success_rate",
+            "legendFormat": "Success Rate %",
+            "refId": "A"
+          },
+          {
+            "expr": "ainur:api_p95_latency",
+            "legendFormat": "P95 Latency (ms)",
+            "refId": "B"
+          },
+          {
+            "expr": "ainur:blockchain_uptime",
+            "legendFormat": "Blockchain Uptime %",
+            "refId": "C"
+          }
+        ],
+        "gridPos": {
+          "h": 4,
+          "w": 12,
+          "x": 12,
+          "y": 0
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "red",
+                  "value": 0
+                },
+                {
+                  "color": "yellow",
+                  "value": 95
+                },
+                {
+                  "color": "green",
+                  "value": 99
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 3,
+        "title": "Task Throughput (tasks/sec)",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(ainur_tasks_total[5m])",
+            "legendFormat": "{{status}}",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 4
+        },
+        "yAxes": [
+          {
+            "label": "Tasks/sec",
+            "min": 0
+          }
+        ],
+        "legend": {
+          "show": true
+        }
+      },
+      {
+        "id": 4,
+        "title": "API Request Duration P95 (ms)",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(ainur_api_request_duration_seconds_bucket[5m])) by (le)) * 1000",
+            "legendFormat": "P95 Latency",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.99, sum(rate(ainur_api_request_duration_seconds_bucket[5m])) by (le)) * 1000",
+            "legendFormat": "P99 Latency",
+            "refId": "B"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 4
+        },
+        "yAxes": [
+          {
+            "label": "Milliseconds",
+            "min": 0
+          }
+        ],
+        "alert": {
+          "conditions": [
+            {
+              "evaluator": {
+                "params": [100],
+                "type": "gt"
+              },
+              "operator": {
+                "type": "and"
+              },
+              "query": {
+                "params": ["A", "5m", "now"]
+              },
+              "reducer": {
+                "params": [],
+                "type": "avg"
+              },
+              "type": "query"
+            }
+          ],
+          "frequency": "10s",
+          "handler": 1,
+          "name": "High API Latency",
+          "noDataState": "no_data",
+          "notifications": []
+        }
+      },
+      {
+        "id": 5,
+        "title": "Error Rate (%)",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "(sum(rate(ainur_api_requests_total{status=~\"5..\"}[5m])) / sum(rate(ainur_api_requests_total[5m]))) * 100",
+            "legendFormat": "API Errors",
+            "refId": "A"
+          },
+          {
+            "expr": "(sum(rate(ainur_tasks_total{status=\"failed\"}[5m])) / sum(rate(ainur_tasks_total[5m]))) * 100",
+            "legendFormat": "Task Failures",
+            "refId": "B"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 12
+        },
+        "yAxes": [
+          {
+            "label": "Percent",
+            "max": 100,
+            "min": 0
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "Active Agents",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "ainur_agents_registered_total",
+            "legendFormat": "Total",
+            "refId": "A"
+          },
+          {
+            "expr": "sum(ainur_agent_health_status{agent_type!=\"\"})",
+            "legendFormat": "Healthy",
+            "refId": "B"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 12
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            }
+          }
+        }
+      },
+      {
+        "id": 7,
+        "title": "Task Queue Depth",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "ainur_tasks_in_queue",
+            "legendFormat": "Queue Depth",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {
+          "h": 6,
+          "w": 8,
+          "x": 0,
+          "y": 20
+        },
+        "yAxes": [
+          {
+            "label": "Tasks",
+            "min": 0
+          }
+        ],
+        "alert": {
+          "conditions": [
+            {
+              "evaluator": {
+                "params": [1000],
+                "type": "gt"
+              },
+              "operator": {
+                "type": "and"
+              },
+              "query": {
+                "params": ["A", "5m", "now"]
+              },
+              "reducer": {
+                "params": [],
+                "type": "last"
+              },
+              "type": "query"
+            }
+          ],
+          "frequency": "10s",
+          "handler": 1,
+          "name": "High Task Queue Depth",
+          "noDataState": "no_data"
+        }
+      },
+      {
+        "id": 8,
+        "title": "Reputation Updates",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(ainur_reputation_updates_total[5m])",
+            "legendFormat": "{{result}}",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {
+          "h": 6,
+          "w": 8,
+          "x": 8,
+          "y": 20
+        },
+        "yAxes": [
+          {
+            "label": "Updates/sec",
+            "min": 0
+          }
+        ]
+      },
+      {
+        "id": 9,
+        "title": "Payment Status",
+        "type": "piechart",
+        "targets": [
+          {
+            "expr": "increase(ainur_payments_total[1h])",
+            "legendFormat": "{{type}}",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {
+          "h": 6,
+          "w": 8,
+          "x": 16,
+          "y": 20
+        }
+      },
+      {
+        "id": 10,
+        "title": "Blockchain Health",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "ainur_blockchain_connection_status",
+            "legendFormat": "Connection Status",
+            "refId": "A"
+          },
+          {
+            "expr": "ainur_blockchain_block_height",
+            "legendFormat": "Block Height",
+            "refId": "B"
+          }
+        ],
+        "gridPos": {
+          "h": 6,
+          "w": 12,
+          "x": 0,
+          "y": 26
+        },
+        "yAxes": [
+          {
+            "label": "Status/Height",
+            "min": 0
+          }
+        ]
+      },
+      {
+        "id": 11,
+        "title": "Circuit Breaker Status",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "ainur_reputation_circuit_breaker_state",
+            "legendFormat": "{{service}} - {{state}}",
+            "refId": "A",
+            "format": "table"
+          }
+        ],
+        "gridPos": {
+          "h": 6,
+          "w": 12,
+          "x": 12,
+          "y": 26
+        }
+      },
+      {
+        "id": 12,
+        "title": "Memory Usage",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "go_memstats_alloc_bytes / 1024 / 1024",
+            "legendFormat": "Allocated (MB)",
+            "refId": "A"
+          },
+          {
+            "expr": "go_memstats_sys_bytes / 1024 / 1024",
+            "legendFormat": "System (MB)",
+            "refId": "B"
+          }
+        ],
+        "gridPos": {
+          "h": 6,
+          "w": 8,
+          "x": 0,
+          "y": 32
+        },
+        "yAxes": [
+          {
+            "label": "Megabytes",
+            "min": 0
+          }
+        ]
+      },
+      {
+        "id": 13,
+        "title": "Goroutines",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "go_goroutines",
+            "legendFormat": "Goroutines",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {
+          "h": 6,
+          "w": 8,
+          "x": 8,
+          "y": 32
+        },
+        "yAxes": [
+          {
+            "label": "Count",
+            "min": 0
+          }
+        ]
+      },
+      {
+        "id": 14,
+        "title": "VCG Efficiency Ratio",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "ainur_vcg_efficiency_ratio * 100",
+            "legendFormat": "Efficiency %",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {
+          "h": 6,
+          "w": 8,
+          "x": 16,
+          "y": 32
+        },
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "red",
+                  "value": 0
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "green",
+                  "value": 90
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 15,
+        "title": "Auction Duration Distribution",
+        "type": "heatmap",
+        "targets": [
+          {
+            "expr": "increase(ainur_auction_duration_seconds_bucket[5m])",
+            "legendFormat": "{{le}}",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 38
+        }
+      },
+      {
+        "id": 16,
+        "title": "Agent Selection Performance",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(ainur_agent_selection_duration_seconds_bucket[5m])) by (le)) * 1000",
+            "legendFormat": "P95",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.99, sum(rate(ainur_agent_selection_duration_seconds_bucket[5m])) by (le)) * 1000",
+            "legendFormat": "P99",
+            "refId": "B"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 38
+        },
+        "yAxes": [
+          {
+            "label": "Milliseconds",
+            "min": 0
+          }
+        ]
+      }
+    ],
+    "templating": {
+      "list": [
+        {
+          "name": "environment",
+          "type": "custom",
+          "options": [
+            {
+              "text": "Production",
+              "value": "production",
+              "selected": true
+            },
+            {
+              "text": "Development",
+              "value": "development",
+              "selected": false
+            }
+          ]
+        },
+        {
+          "name": "time_range",
+          "type": "custom",
+          "options": [
+            {
+              "text": "5m",
+              "value": "5m"
+            },
+            {
+              "text": "1h",
+              "value": "1h",
+              "selected": true
+            },
+            {
+              "text": "6h",
+              "value": "6h"
+            },
+            {
+              "text": "24h",
+              "value": "24h"
+            }
+          ]
+        }
+      ]
+    },
+    "annotations": {
+      "list": [
+        {
+          "name": "Deployments",
+          "datasource": "Prometheus",
+          "enable": true,
+          "expr": "increase(ainur_deployment_events_total[1m])",
+          "iconColor": "blue",
+          "name": "Deployment Events",
+          "textFormat": "{{version}}"
+        }
+      ]
+    }
+  },
+  "overwrite": true
+}

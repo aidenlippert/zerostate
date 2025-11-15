@@ -1,0 +1,331 @@
+groups:
+  # API Performance Alerts
+  - name: ainur_api_performance
+    rules:
+      - alert: HighAPILatency
+        expr: ainur:api_p95_latency > 100
+        for: 5m
+        labels:
+          severity: warning
+          service: api
+          slo: latency
+        annotations:
+          summary: "High API latency detected"
+          description: "P95 API latency is {{ $value }}ms, exceeding the 100ms threshold for 5 minutes"
+          runbook_url: "https://docs.ainur.com/runbooks/high-latency"
+
+      - alert: CriticalAPILatency
+        expr: ainur:api_p95_latency > 500
+        for: 2m
+        labels:
+          severity: critical
+          service: api
+          slo: latency
+        annotations:
+          summary: "Critical API latency detected"
+          description: "P95 API latency is {{ $value }}ms, exceeding the 500ms critical threshold"
+          runbook_url: "https://docs.ainur.com/runbooks/critical-latency"
+
+      - alert: HighAPIErrorRate
+        expr: (100 - ainur:api_success_rate) > 5
+        for: 5m
+        labels:
+          severity: warning
+          service: api
+          slo: error_rate
+        annotations:
+          summary: "High API error rate detected"
+          description: "API error rate is {{ $value }}%, exceeding the 5% threshold for 5 minutes"
+          runbook_url: "https://docs.ainur.com/runbooks/high-error-rate"
+
+      - alert: CriticalAPIErrorRate
+        expr: (100 - ainur:api_success_rate) > 10
+        for: 2m
+        labels:
+          severity: critical
+          service: api
+          slo: error_rate
+        annotations:
+          summary: "Critical API error rate detected"
+          description: "API error rate is {{ $value }}%, exceeding the 10% critical threshold"
+          runbook_url: "https://docs.ainur.com/runbooks/critical-error-rate"
+
+  # Infrastructure Alerts
+  - name: ainur_infrastructure
+    rules:
+      - alert: BlockchainDisconnected
+        expr: ainur_blockchain_connection_status == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: blockchain
+        annotations:
+          summary: "Blockchain connection lost"
+          description: "Blockchain service has been disconnected for 1 minute"
+          runbook_url: "https://docs.ainur.com/runbooks/blockchain-disconnected"
+
+      - alert: DatabaseConnectionLoss
+        expr: up{job="postgres-exporter"} == 0
+        for: 30s
+        labels:
+          severity: critical
+          service: database
+        annotations:
+          summary: "Database connection lost"
+          description: "PostgreSQL database is unreachable"
+          runbook_url: "https://docs.ainur.com/runbooks/database-down"
+
+      - alert: OrchestratorDown
+        expr: up{job="ainur-orchestrator"} == 0
+        for: 30s
+        labels:
+          severity: critical
+          service: orchestrator
+        annotations:
+          summary: "Orchestrator service is down"
+          description: "Ainur orchestrator service is not responding to health checks"
+          runbook_url: "https://docs.ainur.com/runbooks/orchestrator-down"
+
+  # Circuit Breaker Alerts
+  - name: ainur_circuit_breakers
+    rules:
+      - alert: ReputationCircuitBreakerOpen
+        expr: ainur_reputation_circuit_breaker_state{state="open"} == 1
+        for: 5m
+        labels:
+          severity: warning
+          service: reputation
+        annotations:
+          summary: "Reputation circuit breaker is open"
+          description: "Reputation service circuit breaker has been open for 5 minutes"
+          runbook_url: "https://docs.ainur.com/runbooks/circuit-breaker-open"
+
+      - alert: PaymentCircuitBreakerOpen
+        expr: ainur_payment_circuit_breaker_state{state="open"} == 1
+        for: 5m
+        labels:
+          severity: warning
+          service: payment
+        annotations:
+          summary: "Payment circuit breaker is open"
+          description: "Payment service circuit breaker has been open for 5 minutes"
+          runbook_url: "https://docs.ainur.com/runbooks/payment-circuit-breaker"
+
+  # Task Processing Alerts
+  - name: ainur_task_processing
+    rules:
+      - alert: HighTaskQueueDepth
+        expr: ainur_tasks_in_queue > 1000
+        for: 5m
+        labels:
+          severity: warning
+          service: orchestrator
+        annotations:
+          summary: "High task queue depth"
+          description: "Task queue depth is {{ $value }}, exceeding the 1000 threshold"
+          runbook_url: "https://docs.ainur.com/runbooks/high-queue-depth"
+
+      - alert: CriticalTaskQueueDepth
+        expr: ainur_tasks_in_queue > 5000
+        for: 2m
+        labels:
+          severity: critical
+          service: orchestrator
+        annotations:
+          summary: "Critical task queue depth"
+          description: "Task queue depth is {{ $value }}, system may be overwhelmed"
+          runbook_url: "https://docs.ainur.com/runbooks/critical-queue-depth"
+
+      - alert: LowTaskSuccessRate
+        expr: ainur:task_success_rate < 90
+        for: 10m
+        labels:
+          severity: warning
+          service: orchestrator
+        annotations:
+          summary: "Low task success rate"
+          description: "Task success rate is {{ $value }}%, below the 90% threshold"
+          runbook_url: "https://docs.ainur.com/runbooks/low-task-success"
+
+      - alert: TaskProcessingStalled
+        expr: rate(ainur_tasks_total[5m]) == 0
+        for: 5m
+        labels:
+          severity: critical
+          service: orchestrator
+        annotations:
+          summary: "Task processing has stalled"
+          description: "No tasks have been processed in the last 5 minutes"
+          runbook_url: "https://docs.ainur.com/runbooks/task-processing-stalled"
+
+  # Payment and Economic Alerts
+  - name: ainur_economic
+    rules:
+      - alert: HighPaymentFailureRate
+        expr: (100 - ainur:payment_success_rate) > 10
+        for: 5m
+        labels:
+          severity: warning
+          service: payment
+        annotations:
+          summary: "High payment failure rate"
+          description: "Payment failure rate is {{ $value }}%, exceeding the 10% threshold"
+          runbook_url: "https://docs.ainur.com/runbooks/payment-failures"
+
+      - alert: LowEscrowBalance
+        expr: ainur_escrow_balance_ainu < 1000
+        for: 5m
+        labels:
+          severity: warning
+          service: payment
+        annotations:
+          summary: "Low escrow balance"
+          description: "Escrow balance is {{ $value }} AINU, below the 1000 AINU threshold"
+          runbook_url: "https://docs.ainur.com/runbooks/low-escrow-balance"
+
+      - alert: VCGAuctionEfficiencyLow
+        expr: ainur:vcg_efficiency < 80
+        for: 15m
+        labels:
+          severity: warning
+          service: auction
+        annotations:
+          summary: "VCG auction efficiency is low"
+          description: "VCG auction efficiency is {{ $value }}%, below the 80% threshold"
+          runbook_url: "https://docs.ainur.com/runbooks/low-auction-efficiency"
+
+  # Agent Management Alerts
+  - name: ainur_agents
+    rules:
+      - alert: LowAgentCount
+        expr: ainur_agents_registered_total < 5
+        for: 10m
+        labels:
+          severity: warning
+          service: orchestrator
+        annotations:
+          summary: "Low agent count"
+          description: "Only {{ $value }} agents are registered, below the minimum of 5"
+          runbook_url: "https://docs.ainur.com/runbooks/low-agent-count"
+
+      - alert: AgentSelectionSlow
+        expr: ainur:agent_selection_p99 > 2000
+        for: 5m
+        labels:
+          severity: warning
+          service: orchestrator
+        annotations:
+          summary: "Slow agent selection"
+          description: "P99 agent selection time is {{ $value }}ms, exceeding the 2s threshold"
+          runbook_url: "https://docs.ainur.com/runbooks/slow-agent-selection"
+
+  # System Resource Alerts
+  - name: ainur_system_resources
+    rules:
+      - alert: HighMemoryUsage
+        expr: (go_memstats_alloc_bytes / go_memstats_sys_bytes) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value }}%, exceeding the 80% threshold"
+          runbook_url: "https://docs.ainur.com/runbooks/high-memory-usage"
+
+      - alert: CriticalMemoryUsage
+        expr: (go_memstats_alloc_bytes / go_memstats_sys_bytes) * 100 > 90
+        for: 2m
+        labels:
+          severity: critical
+          service: system
+        annotations:
+          summary: "Critical memory usage"
+          description: "Memory usage is {{ $value }}%, exceeding the 90% critical threshold"
+          runbook_url: "https://docs.ainur.com/runbooks/critical-memory-usage"
+
+      - alert: HighGoroutineCount
+        expr: go_goroutines > 10000
+        for: 5m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "High goroutine count"
+          description: "Goroutine count is {{ $value }}, exceeding the 10,000 threshold"
+          runbook_url: "https://docs.ainur.com/runbooks/high-goroutine-count"
+
+      - alert: FrequentGCCycles
+        expr: rate(go_gc_duration_seconds_count[5m]) > 1
+        for: 5m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "Frequent garbage collection"
+          description: "GC rate is {{ $value }} cycles/second, indicating memory pressure"
+          runbook_url: "https://docs.ainur.com/runbooks/frequent-gc"
+
+  # SLO Violation Alerts
+  - name: ainur_slo_violations
+    rules:
+      - alert: UptimeSLOViolation
+        expr: ainur:blockchain_uptime < 99.9
+        for: 15m
+        labels:
+          severity: critical
+          service: slo
+          slo_type: uptime
+        annotations:
+          summary: "Uptime SLO violation"
+          description: "Uptime is {{ $value }}%, below the 99.9% SLO target"
+          runbook_url: "https://docs.ainur.com/runbooks/uptime-slo-violation"
+
+      - alert: LatencySLOViolation
+        expr: ainur:api_p95_latency > 100
+        for: 15m
+        labels:
+          severity: critical
+          service: slo
+          slo_type: latency
+        annotations:
+          summary: "Latency SLO violation"
+          description: "P95 latency is {{ $value }}ms, exceeding the 100ms SLO target"
+          runbook_url: "https://docs.ainur.com/runbooks/latency-slo-violation"
+
+      - alert: ErrorRateSLOViolation
+        expr: (100 - ainur:api_success_rate) > 1
+        for: 15m
+        labels:
+          severity: critical
+          service: slo
+          slo_type: error_rate
+        annotations:
+          summary: "Error rate SLO violation"
+          description: "Error rate is {{ $value }}%, exceeding the 1% SLO target"
+          runbook_url: "https://docs.ainur.com/runbooks/error-rate-slo-violation"
+
+  # Business Logic Alerts
+  - name: ainur_business_logic
+    rules:
+      - alert: NoAuctionActivity
+        expr: rate(ainur_auctions_total[1h]) == 0
+        for: 1h
+        labels:
+          severity: warning
+          service: auction
+        annotations:
+          summary: "No auction activity detected"
+          description: "No auctions have been completed in the last hour"
+          runbook_url: "https://docs.ainur.com/runbooks/no-auction-activity"
+
+      - alert: ReputationSystemStalled
+        expr: rate(ainur_reputation_updates_total[30m]) == 0
+        for: 30m
+        labels:
+          severity: warning
+          service: reputation
+        annotations:
+          summary: "Reputation system appears stalled"
+          description: "No reputation updates have been processed in 30 minutes"
+          runbook_url: "https://docs.ainur.com/runbooks/reputation-stalled"

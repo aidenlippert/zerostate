@@ -22,8 +22,8 @@ import (
 	"github.com/aidenlippert/zerostate/libs/websocket"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/libp2p/go-libp2p"
 	_ "github.com/lib/pq"
+	"github.com/libp2p/go-libp2p"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -94,7 +94,25 @@ func TestCompleteEconomicWorkflow(t *testing.T) {
 	defer wsHub.Stop()
 
 	// Initialize API handlers
-	handlers := api.NewHandlers(ctx, logger, p2pHost, signer, hnsw, taskQueue, orch, db, nil, wsHub, wasmRunner, resultStore, nil)
+	handlers := api.NewHandlers(
+		ctx,
+		logger,
+		p2pHost,
+		signer,
+		hnsw,
+		taskQueue,
+		orch,
+		db,
+		nil,
+		wsHub,
+		wasmRunner,
+		resultStore,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+	)
 
 	// Create test router
 	gin.SetMode(gin.TestMode)
@@ -231,13 +249,13 @@ func TestCompleteEconomicWorkflow(t *testing.T) {
 			// Test 4: Create Escrow
 			t.Run("CreateEscrow", func(t *testing.T) {
 				escrowBody := map[string]interface{}{
-					"task_id":             "task-" + uuid.New().String(),
-					"payer_id":            "did:zerostate:test-user",
-					"payee_id":            "did:zerostate:agent-1",
-					"amount":              0.10,
-					"expiration_minutes":  60,
+					"task_id":              "task-" + uuid.New().String(),
+					"payer_id":             "did:zerostate:test-user",
+					"payee_id":             "did:zerostate:agent-1",
+					"amount":               0.10,
+					"expiration_minutes":   60,
 					"auto_release_minutes": 30,
-					"conditions":          "Task must complete successfully within 30 minutes",
+					"conditions":           "Task must complete successfully within 30 minutes",
 				}
 
 				body, _ := json.Marshal(escrowBody)

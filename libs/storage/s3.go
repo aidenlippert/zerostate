@@ -20,6 +20,7 @@ type S3Storage struct {
 	client    *s3.Client
 	bucket    string
 	region    string
+	endpoint  string
 	logger    *zap.Logger
 	urlExpiry time.Duration
 }
@@ -106,6 +107,7 @@ func NewS3Storage(ctx context.Context, cfg *S3Config, logger *zap.Logger) (*S3St
 		client:    s3Client,
 		bucket:    cfg.Bucket,
 		region:    cfg.Region,
+		endpoint:  cfg.Endpoint,
 		logger:    logger,
 		urlExpiry: cfg.URLExpiry,
 	}, nil
@@ -131,8 +133,15 @@ func (s *S3Storage) Upload(ctx context.Context, key string, data []byte, content
 		zap.Int("size", len(data)),
 	)
 
-	// Generate permanent URL (requires signing for access)
-	url := fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", s.bucket, s.region, key)
+	// Generate permanent URL
+	var url string
+	if s.endpoint != "" {
+		// For custom endpoints (R2, MinIO, LocalStack), use path-style URL
+		url = fmt.Sprintf("%s/%s/%s", s.endpoint, s.bucket, key)
+	} else {
+		// For AWS S3, use virtual-hosted-style URL
+		url = fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", s.bucket, s.region, key)
+	}
 
 	return url, nil
 }

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -118,14 +119,19 @@ func (d *Database) GetAgentByID(id string) (*Agent, error) {
 	return &agent, nil
 }
 
+// GetAgentByDID retrieves an agent by DID (convenience wrapper for semantic search integration)
+func (d *Database) GetAgentByDID(did string) (*Agent, error) {
+	return d.GetAgentByID(did) // Reuse GetAgentByID which handles DID lookup
+}
+
 // SearchAgents searches for agents by query (backward compatibility wrapper)
 func (d *Database) SearchAgents(query string) ([]*Agent, error) {
-	// Simple search - return all active agents for now
+	// Simple search - return all online/busy agents for now
 	// TODO: Implement proper text search on capabilities/description
 	sqlQuery := `SELECT id, did, name, description, capabilities, pricing_model, status,
 	                    max_capacity, current_load, region, created_at, updated_at, last_seen_at, metadata
 	             FROM agents
-	             WHERE status = 'active'
+	             WHERE status IN ('online', 'busy', 'active')
 	             LIMIT 100`
 
 	rows, err := d.db.Query(sqlQuery)
@@ -138,14 +144,21 @@ func (d *Database) SearchAgents(query string) ([]*Agent, error) {
 	for rows.Next() {
 		var agent Agent
 		var createdAt, updatedAt, lastSeenAt sql.NullString
+		var capabilitiesStr, metadataStr string // Read as strings first
 		err := rows.Scan(
 			&agent.ID, &agent.DID, &agent.Name, &agent.Description,
-			&agent.Capabilities, &agent.PricingModel, &agent.Status,
+			&capabilitiesStr, &agent.PricingModel, &agent.Status,
 			&agent.MaxCapacity, &agent.CurrentLoad, &agent.Region,
-			&createdAt, &updatedAt, &lastSeenAt, &agent.Metadata,
+			&createdAt, &updatedAt, &lastSeenAt, &metadataStr,
 		)
 		if err != nil {
 			return nil, err
+		}
+
+		// Convert JSON strings to json.RawMessage
+		agent.Capabilities = json.RawMessage(capabilitiesStr)
+		if metadataStr != "" {
+			agent.Metadata = json.RawMessage(metadataStr)
 		}
 
 		// Parse SQLite TEXT timestamps
@@ -161,9 +174,9 @@ func (d *Database) SearchAgents(query string) ([]*Agent, error) {
 		}
 
 		// Initialize backward compatibility fields
-		agent.Price = 0.10          // TODO: Parse from PricingModel JSON
-		agent.Rating = 4.5          // TODO: Get from reputation system
-		agent.TasksCompleted = 10   // TODO: Get from task history
+		agent.Price = 0.10        // TODO: Parse from PricingModel JSON
+		agent.Rating = 4.5        // TODO: Get from reputation system
+		agent.TasksCompleted = 10 // TODO: Get from task history
 		agents = append(agents, &agent)
 	}
 	return agents, nil
@@ -190,21 +203,47 @@ func NewUserRepository(db *Database) *UserRepository {
 
 // Create creates a new user
 func (r *UserRepository) Create(ctx context.Context, user *User) error {
-	query := `
-		INSERT INTO users (id, did, email, password_hash, is_active, metadata)
-		VALUES ($1, $2, $3, $4, $5, $6)
-		RETURNING created_at, updated_at
-	`
 	user.ID = uuid.New()
-	err := r.db.db.QueryRowContext(ctx, query,
-		user.ID, user.DID, user.Email, user.PasswordHash, user.IsActive, user.Metadata,
-	).Scan(&user.CreatedAt, &user.UpdatedAt)
 
-	if err != nil {
-		if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
-			return ErrAlreadyExists
+	// Check if this is PostgreSQL or SQLite
+	if r.db.IsPostgreSQL() {
+		// PostgreSQL: use RETURNING clause
+		query := `
+			INSERT INTO users (id, did, email, password_hash, is_active, metadata)
+			VALUES ($1, $2, $3, $4, $5, $6)
+			RETURNING created_at, updated_at
+		`
+		err := r.db.db.QueryRowContext(ctx, query,
+			user.ID, user.DID, user.Email, user.PasswordHash, user.IsActive, user.Metadata,
+		).Scan(&user.CreatedAt, &user.UpdatedAt)
+
+		if err != nil {
+			if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
+				return ErrAlreadyExists
+			}
+			return fmt.Errorf("%w: %v", ErrDatabase, err)
 		}
-		return fmt.Errorf("%w: %v", ErrDatabase, err)
+	} else {
+		// SQLite: use INSERT without RETURNING, then set timestamps manually
+		query := r.db.ConvertPlaceholders(`
+			INSERT INTO users (id, did, email, password_hash, is_active, metadata)
+			VALUES ($1, $2, $3, $4, $5, $6)
+		`)
+		_, err := r.db.db.ExecContext(ctx, query,
+			user.ID.String(), user.DID, user.Email.String, user.PasswordHash.String, user.IsActive, user.Metadata,
+		)
+
+		if err != nil {
+			// SQLite constraint violation
+			if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+				return ErrAlreadyExists
+			}
+			return fmt.Errorf("%w: %v", ErrDatabase, err)
+		}
+
+		// Set timestamps manually for SQLite
+		user.CreatedAt = time.Now()
+		user.UpdatedAt = time.Now()
 	}
 	return nil
 }
@@ -579,22 +618,20 @@ func (r *AgentRepository) Create(ctx context.Context, agent *Agent) error {
 	}
 
 	// Ensure metadata is never nil or empty for PostgreSQL JSON column
-	if agent.Metadata == nil || len(agent.Metadata) == 0 {
-		agent.Metadata = json.RawMessage(`{}`)
+	if len(agent.Metadata) == 0 {
+		agent.Metadata = json.RawMessage("{}")
 	}
 
-	query := `
+	query := r.db.ConvertPlaceholders(`
 		INSERT INTO agents (
 			id, did, name, description, capabilities, pricing_model, status,
-			max_capacity, current_load, region, created_at, updated_at, metadata,
-			wasm_hash, s3_key
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-	`
+			max_capacity, current_load, region, created_at, updated_at, metadata
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+	`)
 	_, err := r.db.db.ExecContext(ctx, query,
-		agent.ID, agent.DID, agent.Name, agent.Description, agent.Capabilities,
-		agent.PricingModel, agent.Status, agent.MaxCapacity, agent.CurrentLoad,
-		agent.Region, agent.CreatedAt, agent.UpdatedAt, agent.Metadata,
-		agent.WasmHash, agent.S3Key,
+		agent.ID.String(), agent.DID, agent.Name, agent.Description, string(agent.Capabilities),
+		agent.PricingModel.String, agent.Status, agent.MaxCapacity, agent.CurrentLoad,
+		agent.Region.String, agent.CreatedAt, agent.UpdatedAt, string(agent.Metadata),
 	)
 
 	if err != nil {
@@ -780,11 +817,10 @@ func (d *Database) CreateAgent(agent *Agent) error {
 	return repo.Create(context.Background(), agent)
 }
 
-
 // GetUserByEmail retrieves user by email (backward compatibility)
 func (d *Database) GetUserByEmail(email string) (*User, error) {
-	query := `SELECT id, did, email, password_hash, created_at, updated_at, last_login_at, is_active, metadata
-	          FROM users WHERE email = $1`
+	query := d.ConvertPlaceholders(`SELECT id, did, email, password_hash, created_at, updated_at, last_login_at, is_active, metadata
+	          FROM users WHERE email = $1`)
 
 	var user User
 	err := d.db.QueryRow(query, email).Scan(
@@ -801,7 +837,6 @@ func (d *Database) GetUserByEmail(email string) (*User, error) {
 	return &user, nil
 }
 
-
 // Deployment method stubs (backward compatibility - not implemented yet)
 func (d *Database) CreateDeployment(deployment *AgentDeployment) error {
 	return fmt.Errorf("deployments not implemented yet")
@@ -817,4 +852,279 @@ func (d *Database) ListDeploymentsByUser(userID string) ([]*AgentDeployment, err
 
 func (d *Database) UpdateDeployment(deployment *AgentDeployment) error {
 	return ErrNotFound
+}
+
+// ============================================================================
+// TASK REPOSITORY
+// ============================================================================
+
+// CreateTask creates a new task in the database
+func (d *Database) CreateTask(ctx context.Context, task *Task) error {
+	query := d.ConvertPlaceholders(`
+		INSERT INTO tasks (id, task_id, user_did, agent_did, task_type, status, input, output, error, created_at, started_at, completed_at, timeout_at, metadata)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+	`)
+
+	_, err := d.db.ExecContext(ctx, query,
+		task.ID,
+		task.TaskID,
+		task.UserDID,
+		task.AgentDID,
+		task.TaskType,
+		task.Status,
+		task.Input,
+		task.Output,
+		task.Error,
+		task.CreatedAt,
+		task.StartedAt,
+		task.CompletedAt,
+		task.TimeoutAt,
+		task.Metadata,
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to create task: %w", err)
+	}
+
+	return nil
+}
+
+// GetTaskByID retrieves a task by its task_id
+func (d *Database) GetTaskByID(ctx context.Context, taskID string) (*Task, error) {
+	query := d.ConvertPlaceholders(`
+		SELECT id, task_id, user_did, agent_did, task_type, status, input, output, error, created_at, started_at, completed_at, timeout_at, metadata
+		FROM tasks
+		WHERE task_id = $1
+	`)
+
+	var task Task
+	err := d.db.QueryRowContext(ctx, query, taskID).Scan(
+		&task.ID,
+		&task.TaskID,
+		&task.UserDID,
+		&task.AgentDID,
+		&task.TaskType,
+		&task.Status,
+		&task.Input,
+		&task.Output,
+		&task.Error,
+		&task.CreatedAt,
+		&task.StartedAt,
+		&task.CompletedAt,
+		&task.TimeoutAt,
+		&task.Metadata,
+	)
+
+	if err == sql.ErrNoRows {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get task: %w", err)
+	}
+
+	return &task, nil
+}
+
+// UpdateTask updates an existing task
+func (d *Database) UpdateTask(ctx context.Context, task *Task) error {
+	query := d.ConvertPlaceholders(`
+		UPDATE tasks
+		SET agent_did = $1, status = $2, output = $3, error = $4, started_at = $5, completed_at = $6, timeout_at = $7, metadata = $8
+		WHERE task_id = $9
+	`)
+
+	result, err := d.db.ExecContext(ctx, query,
+		task.AgentDID,
+		task.Status,
+		task.Output,
+		task.Error,
+		task.StartedAt,
+		task.CompletedAt,
+		task.TimeoutAt,
+		task.Metadata,
+		task.TaskID,
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to update task: %w", err)
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to check rows affected: %w", err)
+	}
+
+	if rows == 0 {
+		return ErrNotFound
+	}
+
+	return nil
+}
+
+// ListTasksByUser retrieves all tasks for a user
+func (d *Database) ListTasksByUser(ctx context.Context, userDID string, limit int) ([]*Task, error) {
+	query := d.ConvertPlaceholders(`
+		SELECT id, task_id, user_did, agent_did, task_type, status, input, output, error, created_at, started_at, completed_at, timeout_at, metadata
+		FROM tasks
+		WHERE user_did = $1
+		ORDER BY created_at DESC
+		LIMIT $2
+	`)
+
+	rows, err := d.db.QueryContext(ctx, query, userDID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list tasks: %w", err)
+	}
+	defer rows.Close()
+
+	var tasks []*Task
+	for rows.Next() {
+		var task Task
+		err := rows.Scan(
+			&task.ID,
+			&task.TaskID,
+			&task.UserDID,
+			&task.AgentDID,
+			&task.TaskType,
+			&task.Status,
+			&task.Input,
+			&task.Output,
+			&task.Error,
+			&task.CreatedAt,
+			&task.StartedAt,
+			&task.CompletedAt,
+			&task.TimeoutAt,
+			&task.Metadata,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan task: %w", err)
+		}
+		tasks = append(tasks, &task)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows iteration error: %w", err)
+	}
+
+	return tasks, nil
+}
+
+// ============================================================================
+// AGENT KEY REPOSITORY (Sprint 3)
+// ============================================================================
+
+// StoreAgentKey stores an agent's encrypted keypair
+func (d *Database) StoreAgentKey(ctx context.Context, key *AgentKey) error {
+	query := d.ConvertPlaceholders(`
+		INSERT INTO agent_keys (
+			id, agent_did, public_key, encrypted_private_key, key_type, 
+			created_at, is_active
+		) VALUES ($1, $2, $3, $4, $5, $6, $7)
+	`)
+
+	key.ID = uuid.New()
+	key.CreatedAt = time.Now()
+	key.IsActive = true
+
+	_, err := d.db.ExecContext(ctx, query,
+		key.ID,
+		key.AgentDID,
+		key.PublicKey,
+		key.EncryptedPrivateKey,
+		key.KeyType,
+		key.CreatedAt,
+		key.IsActive,
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to store agent key: %w", err)
+	}
+	return nil
+}
+
+// GetAgentKey retrieves the active key for an agent
+func (d *Database) GetAgentKey(ctx context.Context, agentDID string) (*AgentKey, error) {
+	query := d.ConvertPlaceholders(`
+		SELECT id, agent_did, public_key, encrypted_private_key, key_type, 
+		       created_at, rotated_at, expires_at, is_active
+		FROM agent_keys
+		WHERE agent_did = $1 AND is_active = true
+		ORDER BY created_at DESC
+		LIMIT 1
+	`)
+
+	var key AgentKey
+	err := d.db.QueryRowContext(ctx, query, agentDID).Scan(
+		&key.ID,
+		&key.AgentDID,
+		&key.PublicKey,
+		&key.EncryptedPrivateKey,
+		&key.KeyType,
+		&key.CreatedAt,
+		&key.RotatedAt,
+		&key.ExpiresAt,
+		&key.IsActive,
+	)
+
+	if err == sql.ErrNoRows {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get agent key: %w", err)
+	}
+
+	return &key, nil
+}
+
+// RotateAgentKey marks old key as inactive and stores new key
+func (d *Database) RotateAgentKey(ctx context.Context, agentDID string, newKey *AgentKey) error {
+	tx, err := d.db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Deactivate old keys
+	deactivateQuery := d.ConvertPlaceholders(`
+		UPDATE agent_keys
+		SET is_active = false, rotated_at = $1
+		WHERE agent_did = $2 AND is_active = true
+	`)
+
+	_, err = tx.ExecContext(ctx, deactivateQuery, time.Now(), agentDID)
+	if err != nil {
+		return fmt.Errorf("failed to deactivate old keys: %w", err)
+	}
+
+	// Insert new key
+	insertQuery := d.ConvertPlaceholders(`
+		INSERT INTO agent_keys (
+			id, agent_did, public_key, encrypted_private_key, key_type, 
+			created_at, is_active
+		) VALUES ($1, $2, $3, $4, $5, $6, $7)
+	`)
+
+	newKey.ID = uuid.New()
+	newKey.CreatedAt = time.Now()
+	newKey.IsActive = true
+
+	_, err = tx.ExecContext(ctx, insertQuery,
+		newKey.ID,
+		newKey.AgentDID,
+		newKey.PublicKey,
+		newKey.EncryptedPrivateKey,
+		newKey.KeyType,
+		newKey.CreatedAt,
+		newKey.IsActive,
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to insert new key: %w", err)
+	}
+
+	if err = tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return nil
 }

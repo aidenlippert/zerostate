@@ -1,0 +1,1 @@
+Failed to load a solhint's config file.

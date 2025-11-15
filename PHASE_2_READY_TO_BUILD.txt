@@ -1,0 +1,234 @@
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                                                                              ║
+║            🎉 SPRINT 5 PHASE 2: SCAFFOLDING COMPLETE! 🎉                    ║
+║                                                                              ║
+║                  On-Chain Identity & Registry Built                          ║
+║                                                                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+📅 DATE: November 13, 2025
+⏱️  DURATION: ~30 minutes
+🎯 STATUS: ✅ SCAFFOLDING COMPLETE - Ready to Build
+
+────────────────────────────────────────────────────────────────────────────────
+
+📦 WHAT WE BUILT
+
+1. pallet-did (Decentralized Identity)
+   • File: chain/pallets/did/src/lib.rs (~300 lines)
+   • Create/update/revoke DID on-chain
+   • Ed25519 public key storage
+   • DID → Public Key resolution for signature verification
+   
+2. pallet-registry (Agent Discovery)
+   • File: chain/pallets/registry/src/lib.rs (~350 lines)
+   • Register AgentCard (capabilities, WASM hash, pricing)
+   • Capability-based indexing for fast queries
+   • Replace PostgreSQL agent discovery with on-chain state
+   
+3. Runtime Integration
+   • Added pallets to construct_runtime! macro
+   • Configured pallet parameters
+   • Updated Cargo dependencies
+
+────────────────────────────────────────────────────────────────────────────────
+
+🏗️  ARCHITECTURE
+
+STORAGE MAPS CREATED:
+
+pallet-did:
+  DidDocuments:   DID → DidDocument (controller, public_key, timestamps)
+  AccountToDid:   AccountId → DID (reverse lookup)
+
+pallet-registry:
+  AgentCards:       DID → AgentCard (name, capabilities, wasm_hash, price)
+  CapabilityIndex:  Capability → Vec<DID> (fast discovery)
+
+EXTRINSICS (TRANSACTIONS):
+
+pallet-did:
+  • create_did(did, public_key)
+  • update_key(did, new_public_key)
+  • revoke_did(did)
+
+pallet-registry:
+  • register_agent(did, name, capabilities, wasm_hash, price)
+  • update_agent(did, new_capabilities, new_price)
+  • deregister_agent(did)
+
+────────────────────────────────────────────────────────────────────────────────
+
+🔄 WHAT THIS REPLACES
+
+BEFORE (Centralized):
+  PostgreSQL Database
+  ├── users table
+  ├── agents table  ← THIS IS BEING REPLACED
+  └── tasks table
+  
+  Orchestrator: SELECT * FROM agents WHERE capability = 'math'
+
+AFTER (Decentralized):
+  Substrate Blockchain
+  ├── pallet-did (identity)
+  ├── pallet-registry (agent discovery)  ← ON-CHAIN NOW!
+  └── pallet-escrow (coming in Phase 3)
+  
+  Orchestrator: substrate.query("registry", "capabilityIndex", "math")
+
+📊 IMPACT:
+  🔒 Trustless: No database admin can manipulate rankings
+  🌐 Permissionless: Anyone can register agents
+  📜 Auditable: All registrations in immutable blocks
+  💰 Payment-Ready: Next phase adds escrow
+
+────────────────────────────────────────────────────────────────────────────────
+
+✅ VERIFICATION PASSED
+
+All components verified:
+  ✅ Cargo workspace configured
+  ✅ pallet-did scaffolded
+  ✅ pallet-registry scaffolded
+  ✅ Runtime integration complete
+  ✅ Docker build script ready
+
+────────────────────────────────────────────────────────────────────────────────
+
+🚀 NEXT STEPS
+
+IMMEDIATE: Build the Custom Node
+
+Option 1: Docker Build (Recommended - Consistent Environment)
+
+  cd /home/rocz/vegalabs/zerostate/chain
+  ./scripts/build-node.sh
+
+  ⏱️  Time: ~15-30 minutes (Rust compilation is intensive!)
+  📦 Output: ainur-node:custom Docker image
+
+Option 2: Quick Test Compile (Check for errors)
+
+  cd /home/rocz/vegalabs/zerostate/chain
+  cargo check -p ainur-runtime
+
+  ⏱️  Time: ~5 minutes (just checks, no full compile)
+
+Option 3: Local Rust Build (If Docker is problematic)
+
+  cd /home/rocz/vegalabs/zerostate/chain
+  cargo build --release
+
+  ⏱️  Time: ~20-40 minutes
+  📦 Output: ./target/release/ainur-node
+
+────────────────────────────────────────────────────────────────────────────────
+
+AFTER BUILD: Deploy & Test
+
+1. Stop old dev node:
+   docker stop ainur-chain
+   docker rm ainur-chain
+
+2. Start custom node:
+   docker run -d --name ainur-chain \
+     -p 9933:9933 -p 9944:9944 -p 30333:30333 -p 9615:9615 \
+     ainur-node:custom \
+     --dev --rpc-external --rpc-cors all --prometheus-external
+
+3. Test with Polkadot.js Apps:
+   Open: https://polkadot.js.org/apps/?rpc=ws://127.0.0.1:9944
+   
+   Navigate to: Developer > Extrinsics
+   
+   Create DID:
+     Pallet: did
+     Extrinsic: createDid
+     Parameters:
+       did: "did:ainur:alice"
+       public_key: [Alice's public key]
+   
+   Register Agent:
+     Pallet: registry
+     Extrinsic: registerAgent
+     Parameters:
+       did: "did:ainur:alice"
+       name: "Math Agent"
+       capabilities: ["math", "arithmetic"]
+       wasm_hash: [32-byte hash]
+       price_per_task: 1000000000
+   
+   Query Registry:
+     Developer > Chain State > registry > agentCards
+     Input: "did:ainur:alice"
+     Expected: AgentCard with capabilities!
+
+────────────────────────────────────────────────────────────────────────────────
+
+📁 FILES CREATED
+
+chain/
+├── Cargo.toml                           # Workspace configuration
+├── Dockerfile.custom                    # Custom node build
+├── pallets/
+│   ├── did/
+│   │   ├── Cargo.toml                  # Dependencies
+│   │   └── src/lib.rs                  # DID implementation (~300 lines)
+│   └── registry/
+│       ├── Cargo.toml                  # Dependencies
+│       └── src/lib.rs                  # Registry implementation (~350 lines)
+├── runtime/
+│   ├── Cargo.toml                      # Updated with custom pallets
+│   └── src/lib.rs                      # Runtime integration
+├── node/
+│   ├── Cargo.toml                      # Node dependencies
+│   └── build.rs                        # Build script
+└── scripts/
+    ├── build-node.sh                   # Docker build script
+    └── verify-setup.sh                 # Verification script
+
+────────────────────────────────────────────────────────────────────────────────
+
+📊 METRICS
+
+• Rust Code Written: ~650 lines (pallets only)
+• Pallets Created: 2 (did, registry)
+• Storage Maps: 4
+• Extrinsics: 6
+• Events: 6
+• Estimated Compile Time: 15-30 minutes (first build)
+• Docker Image Size: ~500 MB (estimated)
+
+────────────────────────────────────────────────────────────────────────────────
+
+🎯 SUCCESS CRITERIA
+
+✅ Pallets Scaffolded
+✅ Runtime Integration Complete
+✅ Cargo Workspace Configured
+✅ Docker Build Script Created
+✅ Verification Passed
+⏳ Compile & Deploy (Next!)
+⏳ Test Extrinsics (After deploy)
+
+────────────────────────────────────────────────────────────────────────────────
+
+🔥 THE REVOLUTION BEGINS
+
+This is the foundation of trustless discovery. We're replacing centralized 
+database queries with immutable blockchain state.
+
+Phase 3 will add pallet-escrow for on-chain payment settlement.
+Phase 4 will DELETE the PostgreSQL database entirely.
+
+The decentralized economy is no longer a vision—it's code.
+
+────────────────────────────────────────────────────────────────────────────────
+
+Ready to build? Run:
+
+  cd /home/rocz/vegalabs/zerostate/chain
+  ./scripts/build-node.sh
+
+🚀 Let's make history!

@@ -1,0 +1,83 @@
+syntax = "proto3";
+
+package ari.v1;
+
+option go_package = "github.com/aidenlippert/zerostate/reference-runtime-v1/pkg/ari/v1;ariv1";
+
+// Market service handles CFP (Call for Proposals) and bidding
+service Market {
+  // ReceiveCFP receives a CFP from an orchestrator
+  rpc ReceiveCFP(CFP) returns (CFPReceipt);
+  
+  // SubmitBid submits a bid for a CFP
+  rpc SubmitBid(Bid) returns (BidReceipt);
+}
+
+// CFP represents a Call for Proposals
+message CFP {
+  // Unique CFP ID
+  string cfp_id = 1;
+  
+  // Task description
+  string description = 2;
+  
+  // Required capabilities
+  repeated string capabilities = 3;
+  
+  // Budget (in some unit, e.g., AINU tokens)
+  double budget = 4;
+  
+  // Deadline (Unix timestamp)
+  int64 deadline = 5;
+  
+  // Additional requirements (JSON-encoded)
+  string requirements = 6;
+}
+
+// CFPReceipt confirms receipt of a CFP
+message CFPReceipt {
+  // CFP ID (echoed)
+  string cfp_id = 1;
+  
+  // Whether the agent is interested
+  bool interested = 2;
+  
+  // Optional message
+  string message = 3;
+}
+
+// Bid represents a bid for a CFP
+message Bid {
+  // CFP ID
+  string cfp_id = 1;
+  
+  // Agent's DID
+  string agent_did = 2;
+  
+  // Bid amount
+  double amount = 3;
+  
+  // Estimated execution time in milliseconds
+  int64 estimated_time_ms = 4;
+  
+  // Confidence score (0.0 - 1.0)
+  float confidence = 5;
+  
+  // Additional proposal details (JSON-encoded)
+  string proposal = 6;
+}
+
+// BidReceipt confirms receipt of a bid
+message BidReceipt {
+  // Bid ID (generated)
+  string bid_id = 1;
+  
+  // CFP ID (echoed)
+  string cfp_id = 2;
+  
+  // Receipt timestamp
+  int64 timestamp = 3;
+  
+  // Optional message
+  string message = 4;
+}

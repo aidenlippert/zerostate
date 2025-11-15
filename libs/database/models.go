@@ -286,9 +286,11 @@ type ReputationEvent struct {
 type TaskStatus string
 
 const (
+	TaskStatusQueued    TaskStatus = "queued"
 	TaskStatusPending   TaskStatus = "pending"
 	TaskStatusAssigned  TaskStatus = "assigned"
 	TaskStatusExecuting TaskStatus = "executing"
+	TaskStatusRunning   TaskStatus = "running"
 	TaskStatusCompleted TaskStatus = "completed"
 	TaskStatusFailed    TaskStatus = "failed"
 )
@@ -403,4 +405,32 @@ type AgentDeployment struct {
 	Config      string
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
+}
+
+// ============================================================================
+// AGENT KEY MANAGEMENT (Sprint 3)
+// ============================================================================
+
+// AgentKey stores encrypted keypairs for agent blockchain interactions
+type AgentKey struct {
+	ID                  uuid.UUID    `db:"id" json:"id"`
+	AgentDID            string       `db:"agent_did" json:"agent_did"`
+	PublicKey           []byte       `db:"public_key" json:"public_key"`   // Ed25519 public key (32 bytes)
+	EncryptedPrivateKey []byte       `db:"encrypted_private_key" json:"-"` // Encrypted Ed25519 private key (64 bytes encrypted)
+	KeyType             string       `db:"key_type" json:"key_type"`       // "ed25519"
+	CreatedAt           time.Time    `db:"created_at" json:"created_at"`
+	RotatedAt           sql.NullTime `db:"rotated_at" json:"rotated_at,omitempty"` // Last key rotation
+	ExpiresAt           sql.NullTime `db:"expires_at" json:"expires_at,omitempty"` // Key expiration
+	IsActive            bool         `db:"is_active" json:"is_active"`
+}
+
+// IsValid checks if key is still valid
+func (ak *AgentKey) IsValid() bool {
+	if !ak.IsActive {
+		return false
+	}
+	if ak.ExpiresAt.Valid && time.Now().After(ak.ExpiresAt.Time) {
+		return false
+	}
+	return true
 }

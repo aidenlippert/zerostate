@@ -1,0 +1,21 @@
+[package]
+name = "math-agent"
+version = "1.0.0"
+edition = "2021"
+authors = ["Ainur Team <team@ainur.network>"]
+description = "First real WASM agent for Ainur - performs basic math operations"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+# No dependencies needed for basic math!
+# This keeps the WASM binary tiny (<10KB)
+
+[profile.release]
+# Optimize for size (WASM binaries should be small)
+opt-level = "z"       # Optimize for size
+lto = true            # Link-time optimization
+codegen-units = 1     # Better optimization
+panic = "abort"       # Smaller binary (no unwinding)
+strip = true          # Remove debug symbols

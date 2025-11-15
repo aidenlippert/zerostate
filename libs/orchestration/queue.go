@@ -11,30 +11,30 @@ import (
 )
 
 var (
-	ErrQueueClosed = errors.New("task queue is closed")
+	ErrQueueClosed  = errors.New("task queue is closed")
 	ErrTaskNotFound = errors.New("task not found")
-	ErrQueueFull = errors.New("task queue is full")
+	ErrQueueFull    = errors.New("task queue is full")
 )
 
 // TaskQueue manages pending tasks with priority-based scheduling
 type TaskQueue struct {
 	// Priority queue
-	queue    *priorityQueue
-	queueMu  sync.RWMutex
+	queue   *priorityQueue
+	queueMu sync.RWMutex
 
 	// Task storage
-	tasks    map[string]*Task
-	tasksMu  sync.RWMutex
+	tasks   map[string]*Task
+	tasksMu sync.RWMutex
 
 	// Configuration
-	maxSize  int
-	logger   *zap.Logger
+	maxSize int
+	logger  *zap.Logger
 
 	// Lifecycle
-	ctx      context.Context
-	cancel   context.CancelFunc
-	closed   bool
-	closeMu  sync.RWMutex
+	ctx     context.Context
+	cancel  context.CancelFunc
+	closed  bool
+	closeMu sync.RWMutex
 
 	// Notifications
 	notifyCh chan struct{}

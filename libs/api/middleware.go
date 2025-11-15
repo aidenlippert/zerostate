@@ -18,8 +18,8 @@ import (
 
 // Context keys for correlation ID
 const (
-	correlationIDKey  = "correlation_id"
-	requestIDKey      = "request_id"
+	correlationIDKey = "correlation_id"
+	requestIDKey     = "request_id"
 )
 
 // generateCorrelationID generates a unique correlation ID
@@ -251,8 +251,8 @@ func rateLimitMiddleware(ratePerMinute int) gin.HandlerFunc {
 
 		if !ipLimiter.Allow() {
 			c.JSON(http.StatusTooManyRequests, gin.H{
-				"error":   "rate limit exceeded",
-				"message": "too many requests from your IP address",
+				"error":       "rate limit exceeded",
+				"message":     "too many requests from your IP address",
 				"retry_after": 60, // seconds
 			})
 			c.Abort()
@@ -304,6 +304,7 @@ func authMiddleware() gin.HandlerFunc {
 
 		// Store user info in context
 		c.Set("user_id", claims.UserID)
+		c.Set("user_did", claims.DID)
 		c.Set("user_email", claims.Email)
 
 		c.Next()

@@ -1,0 +1,59 @@
+syntax = "proto3";
+
+package ari.v1;
+
+option go_package = "github.com/aidenlippert/zerostate/reference-runtime-v1/pkg/ari/v1;ariv1";
+
+// Agent service provides information about the agent's capabilities and identity
+service Agent {
+  // GetInfo returns the agent's card (DID, capabilities, runtime info)
+  rpc GetInfo(GetInfoRequest) returns (GetInfoResponse);
+}
+
+// GetInfoRequest is empty for now
+message GetInfoRequest {}
+
+// GetInfoResponse contains the agent's identity and capabilities
+message GetInfoResponse {
+  // DID of the agent (e.g., "did:ainur:agent:math-001")
+  string did = 1;
+  
+  // Human-readable name
+  string name = 2;
+  
+  // Version string
+  string version = 3;
+  
+  // List of capabilities (e.g., ["math", "arithmetic", "algebra"])
+  repeated string capabilities = 4;
+  
+  // Runtime information
+  RuntimeInfo runtime_info = 5;
+  
+  // Resource limits
+  ResourceLimits limits = 6;
+}
+
+// RuntimeInfo describes the runtime environment
+message RuntimeInfo {
+  // Runtime type (e.g., "wasm", "python", "docker")
+  string type = 1;
+  
+  // Runtime version
+  string version = 2;
+  
+  // Additional metadata
+  map<string, string> metadata = 3;
+}
+
+// ResourceLimits defines the agent's resource constraints
+message ResourceLimits {
+  // Maximum memory in MB
+  int32 max_memory_mb = 1;
+  
+  // Maximum execution time in milliseconds
+  int32 max_execution_time_ms = 2;
+  
+  // Maximum concurrent tasks
+  int32 max_concurrent_tasks = 3;
+}

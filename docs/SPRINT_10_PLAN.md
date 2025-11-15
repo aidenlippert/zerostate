@@ -1,425 +1,147 @@
-# Sprint 10: Build Fixes & End-to-End Integration Testing
+# Sprint 10: Milestone Escrow Activation
 
-**Sprint Goal**: Fix compilation issues, enable full system testing, and verify end-to-end agent marketplace flow
+**Sprint Goal**: Launch milestone-based escrow with conditional payouts, oracle hooks, and developer-facing controls.
 
-**Status**: Planning → In Progress
-**Start Date**: January 2025
-**Target Completion**: 3-5 days
-**Previous Sprint**: [Sprint 9 - Agent Marketplace & Database Integration](./SPRINT_9_COMPLETE.md)
-
----
-
-## Sprint Objectives
-
-### 1. Fix Build & Compilation Issues (Priority: P0 - Critical) 🔴
-**Goal**: Resolve libp2p dependency conflicts and enable successful compilation
-
-**Tasks**:
-- [ ] Diagnose libp2p dependency conflicts in detail
-- [ ] Pin compatible libp2p versions across all modules
-- [ ] Update go.mod/go.work with conflict-free dependencies
-- [ ] Verify clean build with `go build ./...`
-- [ ] Run all existing tests to ensure no regressions
-
-**Acceptance Criteria**:
-- ✅ `go build ./cmd/api` completes successfully
-- ✅ All 254 existing tests still pass
-- ✅ No ambiguous import errors
-- ✅ Server starts without dependency errors
-
-**Estimated Effort**: 4-8 hours
+**Status**: Planning → Ready
+**Start Window**: Week of 17 Nov 2025
+**Duration**: 1 week
+**Previous Sprint**: [Sprint 9 – ARI-first execution + runtime registry](./SPRINT_9_COMPLETE.md)
 
 ---
 
-### 2. Local Development Setup (Priority: P0 - Critical) 🔴
-**Goal**: Enable local testing with minimal external dependencies
+## Objectives
 
-**Tasks**:
-- [ ] Document required environment variables
-- [ ] Set up local PostgreSQL or SQLite for testing
-- [ ] Configure mock S3 storage (or use LocalStack)
-- [ ] Create development configuration file
-- [ ] Test server startup in development mode
+### 1. Milestone Escrow Engine (P0 🔴)
+Build the plumbing that turns pallet support into orchestrator behavior.
 
-**Acceptance Criteria**:
-- ✅ Server starts with default dev configuration
-- ✅ Database initializes with schema
-- ✅ Mock agents seeded successfully
-- ✅ All API endpoints respond (even if with mock data)
+**Tasks**
+- [ ] Extend `TaskMilestone` with `paid`, `paid_at`, `tx_hash`.
+- [ ] Implement `releaseMilestonePayments` / `refundUncompletedMilestones` (blockchain + payment manager fallback).
+- [ ] Persist per-milestone events in `PaymentLifecycleManager`.
+- [ ] Add helper to reconcile pallet events -> local state (temporary poller via `escrowClient.GetEscrow`).
 
-**Estimated Effort**: 2-4 hours
+**Acceptance**
+- Milestone marked `approved` automatically transitions to `paid` (with tx hash) once pallet releases funds.
+- Payment metrics show partial releases.
+- Failed/canceled tasks refund only the outstanding milestones.
 
 ---
 
-### 3. End-to-End Integration Testing (Priority: P1 - High) 🟡
-**Goal**: Verify complete agent marketplace flow works end-to-end
+### 2. API & CLI Surfaces (P0 🔴)
+Expose milestone workflows to product + partners.
 
-**Test Scenarios**:
+**Deliverables**
+- [ ] `POST /api/v1/tasks/milestone` – create milestone task (body: base task + milestones + budget + conditions).
+- [ ] `POST /api/v1/tasks/:task_id/milestones/:idx/complete` – runtime reports completion (optional evidence payload).
+- [ ] `POST /api/v1/tasks/:task_id/milestones/:idx/approve` – payer/committee approval with DID + signature.
+- [ ] `GET /api/v1/tasks/:task_id/milestones` – list milestone state, approvals, payouts, on-chain hashes.
+- [ ] CLI helper (`tools/milestone-demo.go`) to script the flow end-to-end.
 
-#### 3.1 Agent Upload Flow
-- [ ] Upload WASM agent binary via API
-- [ ] Verify database persistence
-- [ ] Verify S3/storage upload (or mock)
-- [ ] Check hash calculation and validation
-- [ ] Confirm agent appears in listings
-
-#### 3.2 Agent Discovery Flow
-- [ ] List all agents
-- [ ] Search agents by keyword
-- [ ] Get single agent details
-- [ ] Verify mock agent data seeding
-
-#### 3.3 Task Execution Flow
-- [ ] Submit task for execution
-- [ ] Verify WASM runner executes
-- [ ] Check result storage in task_results table
-- [ ] Retrieve result via API
-- [ ] List task results with filtering
-
-#### 3.4 Complete User Journey
-- [ ] Register/login user
-- [ ] Upload agent as authenticated user
-- [ ] Search for uploaded agent
-- [ ] Execute task on agent
-- [ ] View task results
-- [ ] List agent execution history
-
-**Acceptance Criteria**:
-- ✅ All test scenarios pass
-- ✅ No runtime errors or panics
-- ✅ Database transactions commit successfully
-- ✅ API responses match expected format
-- ✅ Execution results stored correctly
-
-**Estimated Effort**: 6-10 hours
+**Acceptance**
+- Routes protected via auth middleware; RBAC: payer, agent, committee.
+- Integration tests cover success + error paths (missing DID, double approval, invalid index).
 
 ---
 
-### 4. API Endpoint Testing (Priority: P1 - High) 🟡
-**Goal**: Test all Sprint 9 endpoints with real requests
+### 3. Conditional & Oracle Hooks (P1 🟡)
+Allow milestone release only when real-world conditions are satisfied.
 
-**Endpoints to Test**:
+**Tasks**
+- [ ] Define `Condition` struct (type, operator, target, oracle URL).
+- [ ] Implement oracle adapter stub that signs verdicts (HTTP + DID signature).
+- [ ] Support timeout auto-refund + manual override.
 
-#### Task Execution Endpoints
-```bash
-# Execute task directly
-POST /api/v1/tasks/execute
-{
-  "agent_id": "agent_001",
-  "input": "test input"
-}
-
-# Get task result
-GET /api/v1/tasks/:id/results
-
-# List task results
-GET /api/v1/tasks/results?agent_id=xxx&limit=10
-```
-
-#### Agent Discovery Endpoints
-```bash
-# List agents
-GET /api/v1/agents?limit=20&offset=0
-
-# Search agents
-GET /api/v1/agents/search?q=data
-
-# Get agent details
-GET /api/v1/agents/:id
-
-# Get agent stats
-GET /api/v1/agents/:id/stats
-```
-
-**Test Cases**:
-- [ ] Valid requests return 200 OK
-- [ ] Invalid agent_id returns 404
-- [ ] Missing required fields returns 400
-- [ ] Unauthorized requests return 401
-- [ ] Database errors handled gracefully
-- [ ] Response format matches documentation
-
-**Estimated Effort**: 4-6 hours
+**Acceptance**
+- Demo: milestone released only when oracle returns `accuracy >= 0.9`.
+- Timeout path refunds milestone automatically if condition unmet by deadline.
 
 ---
 
-### 5. Performance & Load Testing (Priority: P2 - Medium) 🟢
-**Goal**: Validate system performance under realistic load
+### 4. Observability & Docs (P1 🟡)
+Make milestone activity transparent.
 
-**Test Scenarios**:
-- [ ] Single agent execution: <100ms response time
-- [ ] Concurrent executions: 10 simultaneous tasks
-- [ ] Agent search performance: <50ms query time
-- [ ] Database connection pooling works correctly
-- [ ] Memory usage stays bounded
+**Deliverables**
+- [ ] Prometheus metrics: `ainur_milestones_total`, `ainur_milestones_paid`, `ainur_milestone_value_ainu`, `ainur_milestone_refunds_total`.
+- [ ] Grafana panel “Milestone Escrow” showing per-status counts + recent payouts.
+- [ ] Docs:
+  - `developer/milestone-escrow-guide.md` (API walkthrough, JSON schema, curl snippets).
+  - `core-technical/05.5_warden_verification.md` (TEE+ZK proofs for milestone validation).
+- [ ] Update `GETTING_STARTED.md` with “Run a milestone workflow”.
 
-**Tools**:
-- `ab` (Apache Bench) for simple load testing
-- Custom Go benchmark tests
-- Database query profiling
-
-**Acceptance Criteria**:
-- ✅ Task execution: <100ms average (excluding WASM runtime)
-- ✅ Agent search: <50ms query time
-- ✅ Concurrent executions: 10+ without errors
-- ✅ Memory usage: <500MB under load
-
-**Estimated Effort**: 3-5 hours
+**Acceptance**
+- Metrics visible locally (`/metrics`) and on devnet dashboards.
+- Docs reviewed (prestige tone, no casual phrasing).
 
 ---
 
-### 6. Documentation & Developer Experience (Priority: P2 - Medium) 🟢
-**Goal**: Make it easy for developers to get started
+### 5. Testing & Rollout (P1 🟡)
 
-**Deliverables**:
-- [ ] Create QUICKSTART.md with setup instructions
-- [ ] Document all API endpoints with examples
-- [ ] Add environment variable reference
-- [ ] Create example curl commands
-- [ ] Write troubleshooting guide
+**Test Matrix**
+- SQLite + mock escrow (unit + integration).
+- `chain-v2` devnet with pallet-escrow (milestones add → approve → release).
+- Failure modes: partial approvals, oracle failure, dispute escalation.
 
-**Estimated Effort**: 2-3 hours
+**Rollout**
+- Feature flag `ENABLE_MILESTONE_ESCROW`.
+- Demo runbook + recorded CLI session.
+- Sprint notes + release post summarizing the flow.
 
 ---
 
 ## Technical Approach
 
-### 1. libp2p Dependency Resolution Strategy
+1. **Data Model**
+   - Add `Paid bool`, `PaidAt *time.Time`, `PayoutTxHash string` to `TaskMilestone`.
+   - store milestone snapshots in DB (task queue + analytics) for auditability.
 
-**Analysis Phase**:
-```bash
-# Check current conflicts
-go mod graph | grep libp2p
+2. **Escrow Client**
+   - Reuse pallet calls: `create_escrow`, `add_milestone`, `complete_milestone`, `approve_milestone`.
+   - If pallet v1.1 exposes `release_milestone_payment`, wrap it; otherwise lean on automatic release triggered by approvals.
 
-# Identify version mismatches
-go list -m all | grep libp2p
-```
+3. **Orchestrator Flow**
+   - Execution path marks milestone `completed`.
+   - Approval endpoint updates DID list, calls pallet, then marks `Paid` once release confirmed.
+   - Payment manager emits `PaymentEvent` per milestone (type `milestone_release`).
 
-**Resolution Options**:
+4. **API Design**
+   - Request/response schemas versioned (`milestone_schema_version: 1`).
+   - Evidence payload stored as JSON (hash large blobs to R2/S3).
+   - All endpoints logged with correlation IDs for dispute traceability.
 
-**Option A: Pin to Single Version** (Recommended)
-```go
-// In go.mod
-require (
-    github.com/libp2p/go-libp2p v0.33.0
-)
-
-replace (
-    github.com/libp2p/go-libp2p/core => github.com/libp2p/go-libp2p v0.33.0
-)
-```
-
-**Option B: Update All Modules**
-```bash
-go get -u github.com/libp2p/go-libp2p@latest
-go mod tidy
-```
-
-**Option C: Separate Module** (if A & B fail)
-- Isolate libp2p dependencies in separate module
-- Use interface adapters to decouple
+5. **Docs & DX**
+   - Provide sample JSON + CLI commands.
+   - Section in Docs home describing milestone use cases (enterprise deployments, phased delivery).
 
 ---
 
-### 2. Testing Infrastructure
+## Milestone Schedule
 
-**Test Database Setup**:
-```bash
-# Option 1: PostgreSQL in Docker
-docker run --name postgres-test -e POSTGRES_PASSWORD=test -p 5432:5432 -d postgres:15
-
-# Option 2: SQLite (simpler for dev)
-export DATABASE_URL="sqlite://./test.db"
-```
-
-**Mock S3 Setup**:
-```bash
-# Option 1: LocalStack
-docker run -p 4566:4566 localstack/localstack
-
-# Option 2: In-memory mock (already implemented)
-# Use nil s3Storage - system handles gracefully
-```
-
-**Environment Configuration**:
-```bash
-# Create .env.test file
-DATABASE_URL=postgres://localhost/zerostate_test
-JWT_SECRET=test-secret-key-do-not-use-in-production
-S3_BUCKET=test-bucket
-S3_ENDPOINT=http://localhost:4566  # For LocalStack
-```
+| Day | Track | Deliverables |
+| --- | --- | --- |
+| 1 | Core plumbing | TaskMilestone struct update, release/refund functions, unit tests |
+| 2 | API layer | REST handlers + router + auth checks |
+| 3 | Oracle hooks | Condition model, oracle adapter stub, timeout paths |
+| 4 | Metrics & docs | Prometheus, Grafana, developer guide |
+| 5 | Testing & rollout | Integration suite, demo script, release notes |
 
 ---
 
-### 3. Integration Test Structure
+## Risks & Mitigation
 
-**Test File**: `tests/integration/sprint10_e2e_test.go`
-
-```go
-func TestCompleteAgentMarketplaceFlow(t *testing.T) {
-    // Setup
-    db := setupTestDatabase(t)
-    defer db.Close()
-
-    server := setupTestServer(t, db)
-    defer server.Stop()
-
-    // Test: Upload Agent
-    t.Run("UploadAgent", func(t *testing.T) {
-        // Upload WASM binary
-        // Verify database persistence
-        // Check response
-    })
-
-    // Test: Search Agent
-    t.Run("SearchAgent", func(t *testing.T) {
-        // Search for uploaded agent
-        // Verify appears in results
-    })
-
-    // Test: Execute Task
-    t.Run("ExecuteTask", func(t *testing.T) {
-        // Execute task on agent
-        // Verify result storage
-        // Check response format
-    })
-
-    // Test: Get Results
-    t.Run("GetTaskResults", func(t *testing.T) {
-        // Retrieve result by ID
-        // List all results
-        // Filter by agent_id
-    })
-}
-```
+| Risk | Impact | Mitigation |
+| --- | --- | --- |
+| Substrate milestone release events not exposed | Delays payout confirmation | Poll `GetEscrow` + parse `milestones` as interim solution |
+| Partial release unsupported by PaymentManager | Fallback path blocked | Extend PaymentManager with `RecordMilestonePayout` that deducts portion from outstanding balance |
+| Oracle integration slows sprint | Conditional releases slip | Ship deterministic mock oracle first, wire external feeds in Sprint 11 |
 
 ---
 
-## Success Criteria
-
-### Must Have (P0)
-- ✅ Project compiles successfully with `go build ./...`
-- ✅ All 254 existing tests pass
-- ✅ Server starts and responds to health checks
-- ✅ Database schema initializes correctly
-- ✅ Basic API endpoints return valid responses
-
-### Should Have (P1)
-- ✅ Complete end-to-end flow works (upload → execute → results)
-- ✅ All Sprint 9 endpoints tested and verified
-- ✅ Agent discovery works with database
-- ✅ Task execution stores results correctly
-- ✅ Error handling works as expected
-
-### Nice to Have (P2)
-- ✅ Performance benchmarks documented
-- ✅ Load testing shows acceptable performance
-- ✅ QUICKSTART.md created
-- ✅ API documentation complete
-- ✅ Troubleshooting guide written
+## Definition of Done
+- ✅ Milestone creation, completion, approval, and payout flows operate against devnet + local mocks.
+- ✅ REST + CLI entry points documented and tested.
+- ✅ Metrics live; dashboards refreshed.
+- ✅ Sprint 10 completion report ready for publish.
 
 ---
 
-## Risk Assessment
-
-### High Risk 🔴
-**Risk**: libp2p dependencies cannot be easily resolved
-- **Mitigation**: Have fallback plan to isolate in separate module
-- **Contingency**: Worst case - disable p2p features temporarily
-
-**Risk**: WASM execution fails in integration tests
-- **Mitigation**: Use working wasm-demo as reference
-- **Contingency**: Start with simple WASM binaries, increase complexity
-
-### Medium Risk 🟡
-**Risk**: Database setup too complex for developers
-- **Mitigation**: Provide Docker Compose setup
-- **Contingency**: Default to SQLite for simplicity
-
-**Risk**: S3 integration issues
-- **Mitigation**: System already handles nil s3Storage gracefully
-- **Contingency**: Use mock/placeholder URLs for testing
-
-### Low Risk 🟢
-**Risk**: Performance doesn't meet targets
-- **Mitigation**: Targets are already conservative
-- **Contingency**: Document actual performance, adjust targets
-
----
-
-## Milestones
-
-### Milestone 1: Clean Build (Day 1-2)
-- Fix libp2p dependencies
-- Successful compilation
-- All tests pass
-
-### Milestone 2: Local Development (Day 2-3)
-- Database setup working
-- Server starts successfully
-- Mock agents seeded
-
-### Milestone 3: Integration Testing (Day 3-4)
-- Upload flow tested
-- Execution flow tested
-- Discovery flow tested
-
-### Milestone 4: Polish & Documentation (Day 4-5)
-- Performance testing complete
-- Documentation written
-- Sprint 10 completion report
-
----
-
-## Dependencies & Prerequisites
-
-### Required
-- Go 1.24+ installed
-- PostgreSQL 15+ OR SQLite3
-- Git for version control
-
-### Optional
-- Docker for containerized testing
-- LocalStack for S3 mocking
-- Apache Bench for load testing
-
-### From Previous Sprints
-- ✅ Sprint 8: WASM execution engine (verified working)
-- ✅ Sprint 9: Database schema and API endpoints
-- ✅ 254 existing tests passing
-
----
-
-## Next Sprint Preview (Sprint 11)
-
-Potential focus areas after Sprint 10:
-
-1. **Frontend Integration** - Connect web UI to new API endpoints
-2. **Authentication & Authorization** - JWT, user permissions, rate limiting
-3. **Payment Integration** - Stripe/payment processor for agent usage
-4. **Advanced Features** - Agent versioning, deployment management
-5. **Production Deployment** - Fly.io deployment with real infrastructure
-
----
-
-## Related Documentation
-
-- [Sprint 9 Completion Report](./SPRINT_9_COMPLETE.md)
-- [Sprint 8 Completion Report](./SPRINT_8_COMPLETE.md)
-- [Project Status](./PROJECT_STATUS.md)
-- [Test Matrix](./TEST_MATRIX.md)
-
----
-
-## Notes
-
-**Key Insight**: Sprint 9 delivered all features but compilation is blocked. Sprint 10 focuses on making it actually work and testable.
-
-**Philosophy**: "Working software over comprehensive documentation" - Get it running first, then optimize.
-
-**Testing Strategy**: Start simple (health checks) → Medium complexity (API endpoints) → Full integration (complete user journeys)
-
----
-
-**Sprint 10 Status**: Ready to Begin 🚀
+**Sprint 10 Status**: Ready to begin 🚀

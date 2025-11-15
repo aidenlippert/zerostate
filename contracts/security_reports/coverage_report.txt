@@ -1,0 +1,128 @@
+Warning: `--ir-minimum` enables `viaIR` with minimum optimization, which can result in inaccurate source mappings.
+Only use this flag as a workaround if you are experiencing "stack too deep" errors.
+Note that `viaIR` is production ready since Solidity 0.8.13 and above.
+See more: https://github.com/foundry-rs/foundry/issues/3357
+Compiling 61 files with Solc 0.8.24
+Solc 0.8.24 finished in 22.61s
+Compiler run successful with warnings:
+Warning (2072): Unused local variable.
+   --> test/AINUStaking.t.sol:144:10:
+    |
+144 |         (uint256 amount, , , , , , uint256 slashedAmount, , ) = staking.stakes(agent1);
+    |          ^^^^^^^^^^^^^^
+
+Warning (2018): Function state mutability can be restricted to view
+   --> test/AINUStakingRewards.t.sol:210:5:
+    |
+210 |     function testGetEffectiveAPR() public {
+    |     ^ (Relevant source part starts here and spans across multiple lines).
+
+Analysing contracts...
+Running tests...
+
+Ran 9 tests for test/AINUToken.t.sol:AINUTokenTest
+[PASS] testBasicTransfer() (gas: 61156)
+[PASS] testBurnExemption() (gas: 148930)
+[PASS] testBurnOnTransfer() (gas: 126651)
+[PASS] testCirculatingSupply() (gas: 59365)
+[PASS] testInitialSupply() (gas: 21919)
+[PASS] testManualBurn() (gas: 61347)
+[PASS] testOnlyOwnerFunctions() (gas: 32320)
+[PASS] testPause() (gas: 24405)
+[PASS] testToggleBurn() (gas: 142774)
+Suite result: ok. 9 passed; 0 failed; 0 skipped; finished in 18.18ms (10.35ms CPU time)
+
+Ran 9 tests for test/AINUStaking.t.sol:AINUStakingTest
+[PASS] testAddToStake() (gas: 271401)
+[PASS] testBasicStake() (gas: 255197)
+[PASS] testCannotStakeBelowMinimum() (gas: 57955)
+[PASS] testCannotStakeTwice() (gas: 254840)
+[PASS] testSlashing() (gas: 316884)
+[PASS] testStakingTiers() (gas: 403979)
+[PASS] testTotalStaked() (gas: 392207)
+[PASS] testUnstake() (gas: 243745)
+[PASS] testVotingPower() (gas: 426675)
+Suite result: ok. 9 passed; 0 failed; 0 skipped; finished in 28.16ms (20.03ms CPU time)
+
+Ran 13 tests for test/AINUGovernance.t.sol:AINUGovernanceTest
+[PASS] testCancelProposal() (gas: 227137)
+[PASS] testCannotExecuteBeforeTimelock() (gas: 513959)
+[PASS] testCannotProposeBelowThreshold() (gas: 217236)
+[PASS] testCannotVoteTwice() (gas: 309861)
+[PASS] testCannotVoteWithoutStake() (gas: 232248)
+[PASS] testCreateProposal() (gas: 202877)
+[PASS] testDifferentQuorumRequirements() (gas: 519726)
+[PASS] testExecuteProposal() (gas: 538543)
+[PASS] testProposalDefeated() (gas: 477414)
+[PASS] testProposalDefeatedByQuorum() (gas: 292945)
+[PASS] testProposalSucceeds() (gas: 478356)
+[PASS] testQueueProposal() (gas: 509726)
+[PASS] testVotingOnProposal() (gas: 414652)
+Suite result: ok. 13 passed; 0 failed; 0 skipped; finished in 56.95ms (42.28ms CPU time)
+
+Ran 15 tests for test/AINUTreasury.t.sol:AINUTreasuryTest
+[PASS] testAccumulatedRewards() (gas: 336899)
+[PASS] testBuybackAndBurn() (gas: 107190)
+[PASS] testCancelGrant() (gas: 144035)
+[PASS] testCannotClaimCancelledGrant() (gas: 250472)
+[PASS] testCannotClaimGrantTwice() (gas: 250219)
+[PASS] testCannotClaimZeroRewards() (gas: 37958)
+[PASS] testClaimAgentRewards() (gas: 287556)
+[PASS] testClaimGrant() (gas: 255986)
+[PASS] testClaimNodeRewards() (gas: 287714)
+[PASS] testCollectTaskFee() (gas: 269322)
+[PASS] testCreateGrant() (gas: 149011)
+[PASS] testMultipleAgentsAndNodes() (gas: 351326)
+[PASS] testOnlyAuthorizedCanCollect() (gas: 99788)
+[PASS] testProtocolBalance() (gas: 262472)
+[PASS] testWithdrawProtocolFunds() (gas: 275178)
+Suite result: ok. 15 passed; 0 failed; 0 skipped; finished in 55.81ms (45.88ms CPU time)
+
+Ran 8 tests for test/Integration.t.sol:IntegrationTest
+[PASS] testBurnOnTransferWithTreasury() (gas: 329589)
+[PASS] testCompleteEcosystemFlow() (gas: 1146629)
+[PASS] testFullRevenueDistributionFlow() (gas: 293248)
+[PASS] testFullStakingToVotingFlow() (gas: 769847)
+[PASS] testGrantProposalAndExecution() (gas: 466031)
+[PASS] testMultipleAgentsCompetingForRewards() (gas: 485583)
+[PASS] testSlashingAndGovernance() (gas: 369615)
+[PASS] testStakeVoteAndEarnFlow() (gas: 504476)
+Suite result: ok. 8 passed; 0 failed; 0 skipped; finished in 18.74ms (31.95ms CPU time)
+
+Ran 13 tests for test/AINUStakingRewards.t.sol:AINUStakingRewardsTest
+[PASS] testCalculatePendingRewards12MonthLock() (gas: 241801)
+[PASS] testCalculatePendingRewards3MonthLock() (gas: 242161)
+[PASS] testCalculatePendingRewards6MonthLock() (gas: 242101)
+[PASS] testCalculatePendingRewardsNoLock() (gas: 242276)
+[PASS] testCannotClaimZeroRewards() (gas: 245864)
+[PASS] testCannotCompoundZeroRewards() (gas: 246672)
+[PASS] testClaimRewards() (gas: 275209)
+[PASS] testClaimRewardsTwice() (gas: 305230)
+[PASS] testCompoundIncreasesTier() (gas: 270394)
+[PASS] testCompoundRewards() (gas: 275339)
+[PASS] testGetEffectiveAPR() (gas: 36376)
+[PASS] testMultipleStakersIndependentRewards() (gas: 438610)
+[PASS] testRewardsAccumulateOverTime() (gas: 242091)
+Suite result: ok. 13 passed; 0 failed; 0 skipped; finished in 37.21ms (26.62ms CPU time)
+
+Ran 6 test suites in 63.17ms (215.05ms CPU time): 67 tests passed, 0 failed, 0 skipped (67 total tests)
+
+╭--------------------------+------------------+------------------+-----------------+----------------╮
+| File                     | % Lines          | % Statements     | % Branches      | % Funcs        |
++===================================================================================================+
+| script/Deploy.s.sol      | 0.00% (0/69)     | 0.00% (0/71)     | 0.00% (0/6)     | 0.00% (0/4)    |
+|--------------------------+------------------+------------------+-----------------+----------------|
+| script/DeployLocal.s.sol | 0.00% (0/28)     | 0.00% (0/29)     | 100.00% (0/0)   | 0.00% (0/1)    |
+|--------------------------+------------------+------------------+-----------------+----------------|
+| script/Verify.s.sol      | 0.00% (0/68)     | 0.00% (0/78)     | 0.00% (0/18)    | 0.00% (0/2)    |
+|--------------------------+------------------+------------------+-----------------+----------------|
+| src/AINUGovernance.sol   | 96.25% (77/80)   | 97.50% (78/80)   | 43.33% (13/30)  | 90.00% (9/10)  |
+|--------------------------+------------------+------------------+-----------------+----------------|
+| src/AINUStaking.sol      | 94.64% (106/112) | 96.61% (114/118) | 28.26% (13/46)  | 88.24% (15/17) |
+|--------------------------+------------------+------------------+-----------------+----------------|
+| src/AINUToken.sol        | 82.50% (33/40)   | 87.80% (36/41)   | 100.00% (3/3)   | 80.00% (8/10)  |
+|--------------------------+------------------+------------------+-----------------+----------------|
+| src/AINUTreasury.sol     | 93.33% (56/60)   | 96.15% (50/52)   | 15.79% (3/19)   | 83.33% (10/12) |
+|--------------------------+------------------+------------------+-----------------+----------------|
+| Total                    | 59.52% (272/457) | 59.28% (278/469) | 26.23% (32/122) | 75.00% (42/56) |
+╰--------------------------+------------------+------------------+-----------------+----------------╯

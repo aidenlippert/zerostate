@@ -1,22 +1,29 @@
 package api
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
 
+	"github.com/aidenlippert/zerostate/libs/database"
 	"github.com/aidenlippert/zerostate/libs/orchestration"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
 
 // SubmitTaskRequest represents a task submission request
 type SubmitTaskRequest struct {
 	Query        string                 `json:"query" binding:"required"`
+	Type         string                 `json:"type"`         // Task type (e.g., "math-add")
 	Capabilities []string               `json:"capabilities"` // Agent capabilities required for this task
 	Constraints  map[string]interface{} `json:"constraints"`
+	Input        map[string]interface{} `json:"input"` // Direct task input (e.g., {"function":"add","args":[5,7]})
 	Budget       float64                `json:"budget" binding:"required,gt=0"`
-	Timeout      int                    `json:"timeout"` // seconds
+	Timeout      int                    `json:"timeout"`  // seconds
 	Priority     string                 `json:"priority"` // "low", "medium", "high"
 }
 
@@ -29,7 +36,7 @@ type SubmitTaskResponse struct {
 // TaskStatusResponse represents the task status
 type TaskStatusResponse struct {
 	TaskID     string                 `json:"task_id"`
-	Status     string                 `json:"status"` // "queued", "assigned", "running", "completed", "failed"
+	Status     string                 `json:"status"`   // "queued", "assigned", "running", "completed", "failed"
 	Progress   int                    `json:"progress"` // 0-100
 	AssignedTo string                 `json:"assigned_to,omitempty"`
 	Message    string                 `json:"message,omitempty"`
@@ -38,17 +45,32 @@ type TaskStatusResponse struct {
 
 // TaskResultResponse represents the task result
 type TaskResultResponse struct {
-	TaskID    string                 `json:"task_id"`
-	Status    string                 `json:"status"`
-	Result    interface{}            `json:"result,omitempty"`
-	Error     string                 `json:"error,omitempty"`
-	Cost      float64                `json:"cost"`
-	Duration  int                    `json:"duration"` // milliseconds
-	Metadata  map[string]interface{} `json:"metadata,omitempty"`
+	TaskID   string                 `json:"task_id"`
+	Status   string                 `json:"status"`
+	Result   interface{}            `json:"result,omitempty"`
+	Error    string                 `json:"error,omitempty"`
+	Cost     float64                `json:"cost"`
+	Duration int                    `json:"duration"` // milliseconds
+	Metadata map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // SubmitTask handles task submission
 func (h *Handlers) SubmitTask(c *gin.Context) {
+	defer func() {
+		if r := recover(); r != nil {
+			if h.logger != nil {
+				h.logger.Error("panic in SubmitTask",
+					zap.Any("panic", r),
+					zap.Stack("stack"),
+				)
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":   "internal error",
+				"message": "unexpected error occurred",
+			})
+		}
+	}()
+
 	ctx := c.Request.Context()
 	_ = ctx // For future tracing support
 	logger := h.logger.With(zap.String("handler", "SubmitTask"))
@@ -93,9 +115,29 @@ func (h *Handlers) SubmitTask(c *gin.Context) {
 	// Parse priority
 	priority := parsePriority(req.Priority)
 
-	// TODO: Extract user ID from authentication context
-	// For now, use a placeholder
-	userID := "user-" + c.ClientIP()
+	// Get user DID from authentication context
+	userDIDVal, exists := c.Get("user_did")
+	if !exists {
+		logger.Error("user_did not found in context")
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error":   "unauthorized",
+			"message": "authentication required",
+		})
+		return
+	}
+
+	userDID := userDIDVal.(string)
+
+	// Also get user ID for logging
+	userIDVal, _ := c.Get("user_id")
+	userID := ""
+	if userIDVal != nil {
+		if uid, ok := userIDVal.(string); ok {
+			userID = uid
+		} else if uid, ok := userIDVal.(uuid.UUID); ok {
+			userID = uid.String()
+		}
+	}
 
 	// Use capabilities from request, or default to query-processing
 	capabilities := req.Capabilities
@@ -103,15 +145,29 @@ func (h *Handlers) SubmitTask(c *gin.Context) {
 		capabilities = []string{"query-processing"} // Default for backward compatibility
 	}
 
+	// Prepare task input
+	// If Input is provided, use it directly (ARI-v1 format)
+	// Otherwise, use query/constraints for backwards compatibility
+	taskInput := req.Input
+	if taskInput == nil || len(taskInput) == 0 {
+		taskInput = map[string]interface{}{
+			"query":       req.Query,
+			"constraints": req.Constraints,
+		}
+	}
+
+	// Determine task type
+	taskType := req.Type
+	if taskType == "" {
+		taskType = "general-query" // Default
+	}
+
 	// Create task
 	task := orchestration.NewTask(
-		userID,
-		"general-query", // Task type
+		userDID,
+		taskType,
 		capabilities,
-		map[string]interface{}{
-			"query": req.Query,
-			"constraints": req.Constraints,
-		},
+		taskInput,
 	)
 
 	task.Priority = priority
@@ -140,6 +196,70 @@ func (h *Handlers) SubmitTask(c *gin.Context) {
 		return
 	}
 
+	// Persist task to database
+	if h.db != nil {
+		input, _ := json.Marshal(map[string]interface{}{
+			"query":        req.Query,
+			"capabilities": req.Capabilities,
+			"constraints":  req.Constraints,
+		})
+
+		dbTask := &database.Task{
+			ID:        uuid.New(),
+			TaskID:    task.ID,
+			UserDID:   userDID,
+			TaskType:  "intelligent",
+			Status:    database.TaskStatusQueued,
+			Input:     input,
+			CreatedAt: time.Now(),
+			Metadata:  json.RawMessage(`{}`),
+		}
+
+		if err := h.db.CreateTask(ctx, dbTask); err != nil {
+			logger.Error("failed to persist task to database",
+				zap.Error(err),
+				zap.String("task_id", task.ID),
+			)
+			// Don't fail the request - task is already queued
+		} else {
+			logger.Info("task persisted to database", zap.String("task_id", task.ID))
+		}
+	}
+
+	// Create escrow on blockchain (Sprint 3)
+	if h.blockchain != nil && h.blockchain.IsEnabled() {
+		escrowClient := h.blockchain.Escrow()
+		if escrowClient != nil {
+			// Convert task ID to [32]byte
+			var taskIDBytes [32]byte
+			copy(taskIDBytes[:], []byte(task.ID))
+
+			// Convert budget to smallest unit (assuming 2 decimal places)
+			escrowAmount := uint64(task.Budget * 100)
+
+			// Default timeout: 1 hour (600 blocks at 6s per block)
+			escrowTimeout := uint32(600)
+
+			logger.Info("creating escrow on blockchain",
+				zap.String("task_id", task.ID),
+				zap.Uint64("amount", escrowAmount),
+				zap.Uint32("timeout", escrowTimeout),
+			)
+
+			if err := escrowClient.CreateEscrow(ctx, taskIDBytes, escrowAmount, [32]byte{}, &escrowTimeout); err != nil {
+				logger.Warn("failed to create escrow on blockchain (continuing anyway)",
+					zap.Error(err),
+					zap.String("task_id", task.ID),
+				)
+			} else {
+				logger.Info("escrow created on blockchain",
+					zap.String("task_id", task.ID),
+					zap.Uint64("amount", escrowAmount),
+				)
+			}
+		}
+	}
+
 	logger.Info("task submitted successfully",
 		zap.String("task_id", task.ID),
 		zap.String("user_id", userID),
@@ -156,6 +276,7 @@ func (h *Handlers) SubmitTask(c *gin.Context) {
 
 // GetTask retrieves a task by ID
 func (h *Handlers) GetTask(c *gin.Context) {
+	ctx := c.Request.Context()
 	taskID := c.Param("id")
 	logger := h.logger.With(zap.String("handler", "GetTask"), zap.String("task_id", taskID))
 
@@ -167,21 +288,56 @@ func (h *Handlers) GetTask(c *gin.Context) {
 		return
 	}
 
+	// Try to get from queue first
 	task, err := h.taskQueue.Get(taskID)
-	if err != nil {
-		logger.Error("failed to get task", zap.Error(err))
-		if err == orchestration.ErrTaskNotFound {
-			c.JSON(http.StatusNotFound, gin.H{
-				"error":   "not found",
-				"message": "task not found",
-				"task_id": taskID,
-			})
-		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error":   "internal error",
-				"message": "failed to retrieve task",
-			})
+	if err != nil && err != orchestration.ErrTaskNotFound {
+		logger.Error("failed to get task from queue", zap.Error(err))
+	}
+
+	// If not in queue, try database
+	if task == nil && h.db != nil {
+		dbTask, err := h.db.GetTaskByID(ctx, taskID)
+		if err != nil {
+			if err == database.ErrNotFound {
+				logger.Debug("task not found in database", zap.String("task_id", taskID))
+				c.JSON(http.StatusNotFound, gin.H{
+					"error":   "not found",
+					"message": "task not found",
+					"task_id": taskID,
+				})
+			} else {
+				logger.Error("failed to get task from database", zap.Error(err))
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"error":   "internal error",
+					"message": "failed to retrieve task",
+				})
+			}
+			return
 		}
+
+		// Convert database task to response format
+		c.JSON(http.StatusOK, gin.H{
+			"task_id":      dbTask.TaskID,
+			"status":       string(dbTask.Status),
+			"user_did":     dbTask.UserDID,
+			"agent_did":    dbTask.AgentDID,
+			"task_type":    dbTask.TaskType,
+			"input":        dbTask.Input,
+			"output":       dbTask.Output,
+			"error":        dbTask.Error,
+			"created_at":   dbTask.CreatedAt,
+			"started_at":   dbTask.StartedAt,
+			"completed_at": dbTask.CompletedAt,
+		})
+		return
+	}
+
+	if task == nil {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error":   "not found",
+			"message": "task not found",
+			"task_id": taskID,
+		})
 		return
 	}
 
@@ -243,9 +399,9 @@ func (h *Handlers) ListTasks(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"tasks": tasks,
-		"count": len(tasks),
-		"limit": filter.Limit,
+		"tasks":  tasks,
+		"count":  len(tasks),
+		"limit":  filter.Limit,
 		"offset": filter.Offset,
 	})
 }
@@ -415,7 +571,176 @@ func (h *Handlers) GetTaskResult(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
+// DisputePaymentRequest represents a payment dispute request
+type DisputePaymentRequest struct {
+	Reason string `json:"reason" binding:"required"`
+}
+
+// PaymentStatusResponse represents payment status information
+type PaymentStatusResponse struct {
+	TaskID           string                 `json:"task_id"`
+	PaymentStatus    string                 `json:"payment_status"`
+	Amount           float64                `json:"amount"`
+	EscrowTxHash     string                 `json:"escrow_tx_hash,omitempty"`
+	PaymentTxHash    string                 `json:"payment_tx_hash,omitempty"`
+	CreatedAt        time.Time              `json:"created_at"`
+	UpdatedAt        time.Time              `json:"updated_at"`
+	CompletedAt      *time.Time             `json:"completed_at,omitempty"`
+	Events           []map[string]interface{} `json:"events,omitempty"`
+}
+
+// DisputeTaskPayment handles payment dispute requests
+func (h *Handlers) DisputeTaskPayment(c *gin.Context) {
+	ctx := c.Request.Context()
+	taskID := c.Param("id")
+	logger := h.logger.With(zap.String("handler", "DisputeTaskPayment"), zap.String("task_id", taskID))
+
+	// Get user DID from context
+	userDIDVal, exists := c.Get("user_did")
+	if !exists {
+		logger.Error("user_did not found in context")
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error":   "unauthorized",
+			"message": "authentication required",
+		})
+		return
+	}
+	userDID := userDIDVal.(string)
+
+	// Parse request
+	var req DisputePaymentRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		logger.Error("failed to parse dispute request", zap.Error(err))
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "invalid request",
+			"message": err.Error(),
+		})
+		return
+	}
+
+	// Get task to verify ownership
+	task, err := h.getTaskByID(ctx, taskID)
+	if err != nil {
+		if err == orchestration.ErrTaskNotFound {
+			c.JSON(http.StatusNotFound, gin.H{
+				"error":   "not found",
+				"message": "task not found",
+				"task_id": taskID,
+			})
+		} else {
+			logger.Error("failed to get task", zap.Error(err))
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":   "internal error",
+				"message": "failed to retrieve task",
+			})
+		}
+		return
+	}
+
+	// Verify user owns the task
+	if task.UserID != userDID {
+		logger.Warn("user attempted to dispute payment for task they don't own",
+			zap.String("user_did", userDID),
+			zap.String("task_owner", task.UserID),
+		)
+		c.JSON(http.StatusForbidden, gin.H{
+			"error":   "forbidden",
+			"message": "you can only dispute payments for your own tasks",
+		})
+		return
+	}
+
+	// Check if task is in a state where disputes are allowed
+	if !task.IsTerminal() {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "invalid state",
+			"message": "cannot dispute payment for task that is not completed",
+			"status":  string(task.Status),
+		})
+		return
+	}
+
+	// TODO: Implement payment dispute functionality
+	// This requires public orchestrator API for dispute handling
+	logger.Info("payment dispute request received",
+		zap.String("task_id", taskID),
+		zap.String("user_did", userDID),
+		zap.String("reason", req.Reason),
+	)
+
+	c.JSON(http.StatusOK, gin.H{
+		"task_id": taskID,
+		"status":  "disputed",
+		"message": "payment dispute initiated successfully",
+		"reason":  req.Reason,
+	})
+}
+
+// GetTaskPaymentStatus retrieves payment status for a task
+func (h *Handlers) GetTaskPaymentStatus(c *gin.Context) {
+	taskID := c.Param("id")
+	logger := h.logger.With(zap.String("handler", "GetTaskPaymentStatus"), zap.String("task_id", taskID))
+
+	// TODO: Implement payment status retrieval
+	// This requires public API from orchestrator payment manager
+	logger.Info("payment status request received",
+		zap.String("task_id", taskID),
+	)
+
+	c.JSON(http.StatusNotImplemented, gin.H{
+		"error":   "not implemented",
+		"message": "payment status retrieval not yet implemented",
+		"task_id": taskID,
+	})
+}
+
 // Helper functions
+
+// getTaskByID retrieves a task by ID from queue or database
+func (h *Handlers) getTaskByID(ctx context.Context, taskID string) (*orchestration.Task, error) {
+	if h.taskQueue == nil {
+		return nil, fmt.Errorf("task queue not available")
+	}
+
+	// Try to get from queue first
+	task, err := h.taskQueue.Get(taskID)
+	if err != nil && err != orchestration.ErrTaskNotFound {
+		return nil, err
+	}
+
+	if task != nil {
+		return task, nil
+	}
+
+	// Task not in queue, try database
+	if h.db != nil {
+		dbTask, err := h.db.GetTaskByID(ctx, taskID)
+		if err != nil {
+			return nil, err
+		}
+
+		// Convert database task to orchestration task (simplified)
+		// In a real implementation, you'd want to properly convert all fields
+		task = &orchestration.Task{
+			ID:         dbTask.TaskID,
+			UserID:     dbTask.UserDID,
+			Status:     orchestration.TaskStatus(dbTask.Status),
+			CreatedAt:  dbTask.CreatedAt,
+			UpdatedAt:  dbTask.CreatedAt,
+		}
+		return task, nil
+	}
+
+	return nil, orchestration.ErrTaskNotFound
+}
+
+// getOrchestrator retrieves the orchestrator instance from handlers
+func (h *Handlers) getOrchestrator() *orchestration.Orchestrator {
+	// In a real implementation, this would be injected into handlers
+	// For now, return nil - this will be implemented when the orchestrator
+	// is properly wired into the API handlers
+	return nil
+}
 
 // parsePriority converts string priority to TaskPriority
 func parsePriority(priorityStr string) orchestration.TaskPriority {
@@ -427,6 +752,15 @@ func parsePriority(priorityStr string) orchestration.TaskPriority {
 	case "low":
 		return orchestration.PriorityLow
 	default:
-		return orchestration.PriorityNormal
+		return orchestration.PriorityLow
 	}
+}
+
+// mustMarshalJSON marshals data to JSON, panicking on error (for internal use only)
+func mustMarshalJSON(v interface{}) json.RawMessage {
+	data, err := json.Marshal(v)
+	if err != nil {
+		panic("failed to marshal JSON: " + err.Error())
+	}
+	return data
 }

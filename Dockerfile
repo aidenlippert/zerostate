@@ -18,6 +18,7 @@ COPY libs/database/go.mod ./libs/database/
 COPY libs/execution/go.mod ./libs/execution/
 COPY libs/guild/go.mod ./libs/guild/
 COPY libs/identity/go.mod ./libs/identity/
+COPY libs/llm/go.mod ./libs/llm/
 COPY libs/metrics/go.mod ./libs/metrics/
 COPY libs/orchestration/go.mod ./libs/orchestration/
 COPY libs/p2p/go.mod ./libs/p2p/

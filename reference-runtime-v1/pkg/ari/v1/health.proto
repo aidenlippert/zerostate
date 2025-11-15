@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package ari.v1;
+
+option go_package = "github.com/aidenlippert/zerostate/reference-runtime-v1/pkg/ari/v1;ariv1";
+
+// Health service provides health check capabilities
+service Health {
+  // Check returns the health status of the runtime
+  rpc Check(HealthCheckRequest) returns (HealthCheckResponse);
+}
+
+// HealthCheckRequest is empty for now
+message HealthCheckRequest {}
+
+// HealthCheckResponse contains the health status
+message HealthCheckResponse {
+  // Health status
+  HealthStatus status = 1;
+  
+  // Optional message
+  string message = 2;
+  
+  // Active tasks count
+  int32 active_tasks = 3;
+  
+  // Total tasks processed
+  int64 total_tasks_processed = 4;
+  
+  // Uptime in seconds
+  int64 uptime_seconds = 5;
+}
+
+// HealthStatus represents the health state
+enum HealthStatus {
+  HEALTH_STATUS_UNSPECIFIED = 0;
+  HEALTH_STATUS_SERVING = 1;
+  HEALTH_STATUS_NOT_SERVING = 2;
+  HEALTH_STATUS_DEGRADED = 3;
+}

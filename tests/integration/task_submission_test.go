@@ -50,7 +50,25 @@ func TestTaskSubmissionWorkflow(t *testing.T) {
 	orch := orchestration.NewOrchestrator(ctx, taskQueue, selector, executor, orchConfig, logger)
 
 	// Create handlers
-	handlers := api.NewHandlers(ctx, logger, host, signer, hnsw, taskQueue, orch)
+	handlers := api.NewHandlers(
+		ctx,
+		logger,
+		host,
+		signer,
+		hnsw,
+		taskQueue,
+		orch,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+	)
 
 	// Create server
 	config := api.DefaultConfig()

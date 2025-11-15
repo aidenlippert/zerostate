@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/aidenlippert/zerostate/libs/database"
+	"github.com/aidenlippert/zerostate/libs/substrate"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -24,6 +25,23 @@ const (
 	// Maximum agent upload form size: 60MB (includes metadata)
 	MaxAgentFormSize = 60 * 1024 * 1024
 )
+
+// getUserIDString extracts user ID from gin context and converts to string
+func getUserIDString(c *gin.Context) (string, bool) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		return "", false
+	}
+
+	switch v := userID.(type) {
+	case string:
+		return v, true
+	case uuid.UUID:
+		return v.String(), true
+	default:
+		return "", false
+	}
+}
 
 // UploadAgentRequest represents agent upload metadata
 type UploadAgentRequest struct {
@@ -65,14 +83,14 @@ func (h *Handlers) UploadAgent(c *gin.Context) {
 	logger := h.logger.With(zap.String("handler", "UploadAgent"))
 
 	// Get user ID from context (authentication middleware)
-	userID, exists := c.Get("user_id")
+	userIDStr, exists := getUserIDString(c)
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
 
 	logger.Info("agent upload request",
-		zap.String("user_id", userID.(string)),
+		zap.String("user_id", userIDStr),
 		zap.String("content_type", c.ContentType()),
 	)
 
@@ -254,7 +272,7 @@ func (h *Handlers) UploadAgent(c *gin.Context) {
 	}
 
 	if h.db != nil {
-		logger.Info("attempting to persist agent", 
+		logger.Info("attempting to persist agent",
 			zap.String("agent_id", agentID),
 			zap.Int("capabilities_count", len(metadata.Capabilities)),
 			zap.String("wasm_hash", fileHash),
@@ -273,14 +291,80 @@ func (h *Handlers) UploadAgent(c *gin.Context) {
 			})
 			return
 		}
-		logger.Info("agent metadata stored", zap.String("agent_id", agentID), zap.String("user_id", userID.(string)))
+		logger.Info("agent metadata stored", zap.String("agent_id", agentID), zap.String("user_id", userIDStr))
 	} else {
 		logger.Warn("database not configured, agent metadata not persisted")
 	}
 
+	// Register agent on blockchain (Sprint 2)
+	if h.blockchain != nil && h.blockchain.IsEnabled() {
+		logger.Info("registering agent on blockchain",
+			zap.String("agent_id", agentID),
+			zap.String("name", metadata.Name),
+		)
+
+		// Generate DID for agent
+		agentDID := fmt.Sprintf("did:ainur:%s", agentID)
+
+		// Create DID on-chain
+		didClient := h.blockchain.DID()
+		if didClient != nil {
+			// Get public key from keyring (we'll use the system keyring for now)
+			// In production, each agent would have its own keypair
+			ctx := c.Request.Context()
+			publicKey := h.blockchain.GetPublicKey()
+			if publicKey == nil || len(publicKey) == 0 {
+				logger.Warn("blockchain public key not available")
+			} else {
+				err := didClient.CreateDID(ctx, agentDID, publicKey)
+				if err != nil {
+					logger.Warn("failed to create DID on blockchain (continuing anyway)",
+						zap.Error(err),
+						zap.String("did", agentDID),
+					)
+				} else {
+					logger.Info("DID created on blockchain", zap.String("did", agentDID))
+				}
+			}
+		}
+
+		// Register agent with capabilities
+		registryClient := h.blockchain.Registry()
+		if registryClient != nil {
+			// Convert WASM hash string to [32]byte
+			var wasmHashBytes [32]byte
+			hashBytes, _ := hex.DecodeString(fileHash)
+			copy(wasmHashBytes[:], hashBytes)
+
+			agentReg := substrate.AgentRegistration{
+				DID:          agentDID,
+				Name:         metadata.Name,
+				Capabilities: metadata.Capabilities,
+				WASMHash:     wasmHashBytes[:],
+				PricePerTask: uint64(metadata.Price * 100), // Convert to cents
+			}
+
+			ctx := c.Request.Context()
+			err := registryClient.RegisterAgent(ctx, &agentReg)
+			if err != nil {
+				logger.Warn("failed to register agent on blockchain (continuing anyway)",
+					zap.Error(err),
+					zap.String("did", agentDID),
+				)
+			} else {
+				logger.Info("agent registered on blockchain",
+					zap.String("did", agentDID),
+					zap.Strings("capabilities", metadata.Capabilities),
+				)
+			}
+		}
+	} else {
+		logger.Debug("blockchain service not available, skipping on-chain registration")
+	}
+
 	logger.Info("agent uploaded successfully",
 		zap.String("agent_id", agentID),
-		zap.String("user_id", userID.(string)),
+		zap.String("user_id", userIDStr),
 		zap.String("name", metadata.Name),
 		zap.String("version", metadata.Version),
 		zap.Int64("size", header.Size),
@@ -337,7 +421,7 @@ func (h *Handlers) DeleteAgentBinary(c *gin.Context) {
 	logger := h.logger.With(zap.String("handler", "DeleteAgentBinary"))
 
 	// Get user ID from context
-	userID, exists := c.Get("user_id")
+	userIDStr, exists := getUserIDString(c)
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
@@ -353,7 +437,7 @@ func (h *Handlers) DeleteAgentBinary(c *gin.Context) {
 
 	logger.Info("agent binary deletion request",
 		zap.String("agent_id", agentID),
-		zap.String("user_id", userID.(string)),
+		zap.String("user_id", userIDStr),
 	)
 
 	// TODO: Verify user owns this agent
@@ -395,7 +479,7 @@ func (h *Handlers) UpdateAgentBinary(c *gin.Context) {
 	logger := h.logger.With(zap.String("handler", "UpdateAgentBinary"))
 
 	// Get user ID from context
-	userID, exists := c.Get("user_id")
+	userIDStr, exists := getUserIDString(c)
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
@@ -411,7 +495,7 @@ func (h *Handlers) UpdateAgentBinary(c *gin.Context) {
 
 	logger.Info("agent binary update request",
 		zap.String("agent_id", agentID),
-		zap.String("user_id", userID.(string)),
+		zap.String("user_id", userIDStr),
 	)
 
 	// TODO: Verify user owns this agent

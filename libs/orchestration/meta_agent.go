@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/aidenlippert/zerostate/libs/database"
+	"github.com/aidenlippert/zerostate/libs/search"
 	"go.uber.org/zap"
 )
 
@@ -19,12 +20,25 @@ var (
 	ErrAuctionFailed     = errors.New("auction failed to find suitable agent")
 )
 
+// AgentDatabase interface for database operations (for testing)
+type AgentDatabase interface {
+	GetAgentByDID(did string) (*database.Agent, error)
+	SearchAgents(query string) ([]*database.Agent, error)
+}
+
+// SearchIndex interface for semantic search (for testing)
+type SearchIndex interface {
+	SearchByCapabilities(ctx context.Context, capabilities []string, limit int) ([]*search.AgentCard, error)
+	Search(ctx context.Context, query string, limit int) ([]*search.AgentCard, error)
+}
+
 // MetaAgent is the intelligent orchestrator that selects the best agent for tasks
 // using auction mechanisms, multi-criteria scoring, and geographic routing
 type MetaAgent struct {
-	db      *database.DB
-	logger  *zap.Logger
-	config  *MetaAgentConfig
+	db          AgentDatabase // Interface for testing
+	searchIndex SearchIndex   // Interface for testing
+	logger      *zap.Logger
+	config      *MetaAgentConfig
 }
 
 // MetaAgentConfig configures the meta-agent behavior
@@ -57,7 +71,7 @@ func DefaultMetaAgentConfig() *MetaAgentConfig {
 		ReputationWeight:    0.2,
 		MinAgentsForAuction: 3,
 		MaxAgentsForAuction: 10,
-		MinAgentRating:      3.0,
+		MinAgentRating:      0.0, // Allow new agents with no rating yet
 		EnableFailover:      true,
 		MaxFailoverAgents:   3,
 		EnableGeoRouting:    false, // Disabled until geographic metadata is available
@@ -65,7 +79,7 @@ func DefaultMetaAgentConfig() *MetaAgentConfig {
 }
 
 // NewMetaAgent creates a new meta-agent orchestrator
-func NewMetaAgent(db *database.DB, config *MetaAgentConfig, logger *zap.Logger) *MetaAgent {
+func NewMetaAgent(db AgentDatabase, searchIndex SearchIndex, config *MetaAgentConfig, logger *zap.Logger) *MetaAgent {
 	if config == nil {
 		config = DefaultMetaAgentConfig()
 	}
@@ -88,20 +102,21 @@ func NewMetaAgent(db *database.DB, config *MetaAgentConfig, logger *zap.Logger) 
 	}
 
 	return &MetaAgent{
-		db:     db,
-		logger: logger,
-		config: config,
+		db:          db,
+		searchIndex: searchIndex,
+		logger:      logger,
+		config:      config,
 	}
 }
 
 // AgentBid represents an agent's bid for a task
 type AgentBid struct {
-	Agent          *database.Agent
-	BidPrice       float64   // Agent's bid price
-	Score          float64   // Multi-criteria score (0.0-1.0)
-	EstimatedTime  int64     // Estimated execution time (ms)
-	CapabilityMatch float64  // How well agent capabilities match task (0.0-1.0)
-	SubmittedAt    time.Time
+	Agent           *database.Agent
+	BidPrice        float64 // Agent's bid price
+	Score           float64 // Multi-criteria score (0.0-1.0)
+	EstimatedTime   int64   // Estimated execution time (ms)
+	CapabilityMatch float64 // How well agent capabilities match task (0.0-1.0)
+	SubmittedAt     time.Time
 }
 
 // AgentScore represents detailed scoring breakdown for an agent
@@ -174,46 +189,89 @@ func (m *MetaAgent) SelectAgent(ctx context.Context, task *Task) (*database.Agen
 	return bestBid.Agent, nil
 }
 
-// findEligibleAgents finds agents that meet task requirements
+// findEligibleAgents finds agents that meet task requirements using HNSW semantic search
 func (m *MetaAgent) findEligibleAgents(ctx context.Context, task *Task) ([]*database.Agent, error) {
-	// For now, search all agents and filter by capabilities
-	// TODO: Optimize with capability indexing and database queries
+	var agentCards []*search.AgentCard
+	var err error
 
-	// Build search query from capabilities
-	query := ""
+	// Use HNSW semantic search for fast agent discovery (<50ms)
 	if len(task.Capabilities) > 0 {
-		query = task.Capabilities[0] // Use first capability for search
+		// Search by specific capabilities (more precise)
+		agentCards, err = m.searchIndex.SearchByCapabilities(ctx, task.Capabilities, m.config.MaxAgentsForAuction*2)
+	} else if task.Description != "" {
+		// Fallback to natural language search using task description
+		agentCards, err = m.searchIndex.Search(ctx, task.Description, m.config.MaxAgentsForAuction*2)
+	} else {
+		// No search criteria, use database fallback
+		m.logger.Warn("no capabilities or description for task, falling back to database search",
+			zap.String("task_id", task.ID),
+		)
+		return m.db.SearchAgents("")
 	}
 
-	// Search agents by capabilities
-	agents, err := m.db.SearchAgents(query)
 	if err != nil {
-		return nil, fmt.Errorf("failed to search agents: %w", err)
+		m.logger.Warn("HNSW search failed, falling back to database",
+			zap.Error(err),
+			zap.String("task_id", task.ID),
+		)
+		// Fallback to database if HNSW fails
+		query := ""
+		if len(task.Capabilities) > 0 {
+			query = task.Capabilities[0]
+		}
+		return m.db.SearchAgents(query)
 	}
 
-	// Filter agents by status and rating
-	eligible := make([]*database.Agent, 0)
-	for _, agent := range agents {
-		// Must be active
-		if agent.Status != "active" {
+	if len(agentCards) == 0 {
+		m.logger.Info("no agents found via HNSW search",
+			zap.String("task_id", task.ID),
+			zap.Strings("capabilities", task.Capabilities),
+		)
+		return nil, nil
+	}
+
+	// Convert AgentCards to database.Agent structs
+	// Need to fetch full agent details from database
+	eligible := make([]*database.Agent, 0, len(agentCards))
+	for _, card := range agentCards {
+		// Get full agent details from database using DID
+		agent, err := m.db.GetAgentByDID(card.DID)
+		if err != nil {
+			m.logger.Warn("failed to fetch agent from database",
+				zap.String("did", card.DID),
+				zap.Error(err),
+			)
 			continue
 		}
 
-		// Must meet minimum rating
+		// Filter by status: must be online or busy (not offline)
+		if agent.Status != database.AgentStatusOnline && agent.Status != database.AgentStatusBusy {
+			continue
+		}
+
+		// Filter by minimum rating
 		if agent.Rating < m.config.MinAgentRating {
 			continue
 		}
 
-		// Check if agent has required capabilities
+		// HNSW already matched capabilities via semantic search
+		// But double-check to ensure exact capability match
 		if m.hasRequiredCapabilities(agent, task.Capabilities) {
 			eligible = append(eligible, agent)
 		}
+
+		// Stop once we have enough candidates
+		if len(eligible) >= m.config.MaxAgentsForAuction {
+			break
+		}
 	}
 
-	// Limit to max agents for auction
-	if len(eligible) > m.config.MaxAgentsForAuction {
-		eligible = eligible[:m.config.MaxAgentsForAuction]
-	}
+	m.logger.Info("HNSW semantic search completed",
+		zap.String("task_id", task.ID),
+		zap.Int("cards_found", len(agentCards)),
+		zap.Int("eligible_agents", len(eligible)),
+		zap.Strings("capabilities", task.Capabilities),
+	)
 
 	return eligible, nil
 }

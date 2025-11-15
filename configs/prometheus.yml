@@ -1,0 +1,207 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'ainur-protocol'
+    environment: 'production'
+
+rule_files:
+  - "alert-rules.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+scrape_configs:
+  # Ainur Orchestrator API
+  - job_name: 'ainur-orchestrator'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+    metrics_path: /metrics
+    scheme: https
+    static_configs:
+      - targets:
+          - 'ainur-orchestrator-api.fly.dev'  # Fly.io production endpoint
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: 'ainur-orchestrator-api.fly.dev:443'
+    basic_auth:
+      username: 'prometheus'
+      password_file: '/etc/prometheus/secrets/prometheus_password'
+
+  # Ainur Orchestrator API (local development)
+  - job_name: 'ainur-orchestrator-dev'
+    scrape_interval: 15s
+    scrape_timeout: 5s
+    metrics_path: /metrics
+    scheme: http
+    static_configs:
+      - targets:
+          - 'localhost:8080'
+    relabel_configs:
+      - target_label: environment
+        replacement: 'development'
+
+  # Ainur Health Checks
+  - job_name: 'ainur-health'
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    metrics_path: /health/metrics
+    scheme: https
+    static_configs:
+      - targets:
+          - 'ainur-orchestrator-api.fly.dev'
+
+  # Blockchain Node Metrics (chain-v2)
+  - job_name: 'ainur-blockchain'
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    metrics_path: /metrics
+    scheme: http
+    static_configs:
+      - targets:
+          - 'localhost:35651'  # chain-v2 node
+    relabel_configs:
+      - target_label: service
+        replacement: 'blockchain'
+
+  # Prometheus Self-Monitoring
+  - job_name: 'prometheus'
+    scrape_interval: 30s
+    static_configs:
+      - targets:
+          - 'localhost:9090'
+
+  # Node Exporter (System Metrics)
+  - job_name: 'node-exporter'
+    scrape_interval: 30s
+    static_configs:
+      - targets:
+          - 'localhost:9100'
+    relabel_configs:
+      - target_label: service
+        replacement: 'system'
+
+  # PostgreSQL Exporter (Database Metrics)
+  - job_name: 'postgres-exporter'
+    scrape_interval: 30s
+    static_configs:
+      - targets:
+          - 'localhost:9187'
+    relabel_configs:
+      - target_label: service
+        replacement: 'database'
+
+  # Fly.io Platform Metrics (if available)
+  - job_name: 'fly-platform'
+    scrape_interval: 60s
+    scrape_timeout: 10s
+    metrics_path: /metrics
+    scheme: https
+    static_configs:
+      - targets:
+          - 'api.fly.io'
+    basic_auth:
+      username: 'flyctl'
+      password_file: '/etc/prometheus/secrets/fly_api_token'
+
+# Recording rules for SLI/SLO calculations
+recording_rules:
+  - name: ainur_sli_slo
+    interval: 30s
+    rules:
+      # Success Rate SLI
+      - record: ainur:api_success_rate
+        expr: |
+          (
+            sum(rate(ainur_api_requests_total{status!~"5.."}[5m]))
+            /
+            sum(rate(ainur_api_requests_total[5m]))
+          ) * 100
+
+      # P95 Latency SLI
+      - record: ainur:api_p95_latency
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(ainur_api_request_duration_seconds_bucket[5m])) by (le)
+          ) * 1000
+
+      # Task Success Rate SLI
+      - record: ainur:task_success_rate
+        expr: |
+          (
+            sum(rate(ainur_tasks_total{status="completed"}[5m]))
+            /
+            sum(rate(ainur_tasks_total[5m]))
+          ) * 100
+
+      # Agent Selection Performance SLI
+      - record: ainur:agent_selection_p99
+        expr: |
+          histogram_quantile(0.99,
+            sum(rate(ainur_agent_selection_duration_seconds_bucket[5m])) by (le)
+          ) * 1000
+
+      # Payment Success Rate SLI
+      - record: ainur:payment_success_rate
+        expr: |
+          (
+            sum(rate(ainur_payments_total{type="released"}[5m]))
+            /
+            sum(rate(ainur_payments_total[5m]))
+          ) * 100
+
+      # Blockchain Connection Uptime SLI
+      - record: ainur:blockchain_uptime
+        expr: |
+          avg_over_time(ainur_blockchain_connection_status[5m]) * 100
+
+      # VCG Auction Efficiency SLI
+      - record: ainur:vcg_efficiency
+        expr: |
+          avg_over_time(ainur_vcg_efficiency_ratio[5m]) * 100
+
+      # Circuit Breaker Health SLI
+      - record: ainur:circuit_breaker_health
+        expr: |
+          (
+            sum(ainur_reputation_circuit_breaker_state{state="closed"})
+            /
+            sum(ainur_reputation_circuit_breaker_state)
+          ) * 100
+
+# Storage configuration
+storage:
+  tsdb:
+    retention.time: 30d
+    retention.size: 10GB
+    wal-compression: true
+
+# Remote write configuration (for long-term storage)
+remote_write:
+  - url: 'https://prometheus-remote-write.grafana.net/api/prom/push'
+    basic_auth:
+      username: '${GRAFANA_CLOUD_USER}'
+      password: '${GRAFANA_CLOUD_API_KEY}'
+    queue_config:
+      max_samples_per_send: 1000
+      max_shards: 10
+      capacity: 2500
+
+# Global limits
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  query_log_file: '/prometheus/logs/query.log'
+
+# Feature flags
+feature_flags:
+  - enable-remote-write-receiver
+  - memory-snapshot-on-shutdown
+  - expand-external-labels

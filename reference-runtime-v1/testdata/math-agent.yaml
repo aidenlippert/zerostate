@@ -1,0 +1,45 @@
+agent:
+  did: did:ainur:agent:math-001
+  name: Math Agent
+  version: 1.0.0
+  
+  # Runtime configuration
+  runtime:
+    type: wasm
+    # Path to WASM module (absolute path is safer)
+    path: /home/rocz/vegalabs/zerostate/agents/math-agent-rust/target/wasm32-unknown-unknown/release/math_agent.wasm
+  
+  # Agent capabilities
+  capabilities:
+    - math
+    - arithmetic
+    - algebra
+  
+  # Resource limits
+  limits:
+    max_memory_mb: 128
+    max_execution_time_ms: 5000
+    max_concurrent_tasks: 10
+
+# gRPC server configuration
+server:
+  host: "0.0.0.0"
+  port: 9000
+
+# P2P configuration for L3 Aether
+p2p:
+  enabled: true
+  # Bootstrap nodes (for discovery)
+  bootstrap:
+    - /ip4/127.0.0.1/tcp/4001/p2p/12D3KooWDpJ7As7BWAwRMfu1VU2WCqNjvq387JEYKDBj4kx6nXTN
+  
+  # Topic to publish presence
+  presence_topic: ainur/v1/global/l3_aether/presence/did:ainur:agent:math-001
+  
+  # Heartbeat interval (seconds)
+  heartbeat_interval: 30
+
+# Logging
+logging:
+  level: info
+  format: json

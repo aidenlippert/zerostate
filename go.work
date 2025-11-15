@@ -4,6 +4,9 @@ toolchain go1.24.10
 
 use (
 	./cmd/api
+	./cmd/test-blockchain
+	./libs/aacl-go
+	./libs/agentcard-go
 	./libs/analytics
 	./libs/api
 	./libs/auth
@@ -12,6 +15,7 @@ use (
 	./libs/execution
 	./libs/guild
 	./libs/identity
+	./libs/llm
 	./libs/metrics
 	./libs/orchestration
 	./libs/p2p
@@ -20,13 +24,14 @@ use (
 	./libs/routing
 	./libs/search
 	./libs/storage
+	./libs/substrate
 	./libs/telemetry
 	./libs/websocket
+	./reference-runtime-v1
 )
 
 // Fix dependency conflicts across workspace
 replace (
-
 	// Fix libp2p core ambiguous imports - prevent separate core module
 	github.com/libp2p/go-libp2p/core => github.com/libp2p/go-libp2p v0.39.1
 	// Fix genproto ambiguous imports - use the split packages

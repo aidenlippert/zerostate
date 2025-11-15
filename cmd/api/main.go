@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -14,12 +15,17 @@ import (
 	"github.com/aidenlippert/zerostate/libs/database"
 	"github.com/aidenlippert/zerostate/libs/execution"
 	"github.com/aidenlippert/zerostate/libs/identity"
+	"github.com/aidenlippert/zerostate/libs/llm"
+	"github.com/aidenlippert/zerostate/libs/metrics"
 	"github.com/aidenlippert/zerostate/libs/orchestration"
+	"github.com/aidenlippert/zerostate/libs/p2p"
 	"github.com/aidenlippert/zerostate/libs/search"
 	"github.com/aidenlippert/zerostate/libs/storage"
+	"github.com/aidenlippert/zerostate/libs/substrate"
 	"github.com/aidenlippert/zerostate/libs/websocket"
 	_ "github.com/lib/pq" // PostgreSQL driver
 	"github.com/libp2p/go-libp2p"
+	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 )
 
@@ -59,6 +65,10 @@ func main() {
 		zap.String("log_level_env", logLevel),
 	)
 
+	// Initialize Prometheus metrics registry shared across components
+	promRegistry := prometheus.NewRegistry()
+	promMetrics := metrics.NewPrometheusMetrics(promRegistry)
+
 	// Create context for graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -71,6 +81,14 @@ func main() {
 	}
 	defer p2pHost.Close()
 	logger.Info("p2p host initialized", zap.String("peer_id", p2pHost.ID().String()))
+
+	// Initialize GossipService for market (L4 Concordat)
+	logger.Info("initializing gossip service for market messaging")
+	gossip, err := p2p.NewGossipService(ctx, p2pHost, logger)
+	if err != nil {
+		logger.Fatal("failed to create gossip service", zap.Error(err))
+	}
+	logger.Info("gossip service initialized for market auction protocol")
 
 	// Initialize identity signer
 	logger.Info("initializing identity signer")
@@ -119,14 +137,20 @@ func main() {
 		if err != nil {
 			logger.Fatal("failed to initialize SQLite database", zap.Error(err))
 		}
-		logger.Info("SQLite database initialized (migrations not supported for SQLite)")
+
+		// Initialize SQLite schema automatically
+		logger.Info("initializing SQLite schema")
+		if err := db.InitializeSQLiteSchema(ctx); err != nil {
+			logger.Fatal("failed to initialize SQLite schema", zap.Error(err))
+		}
+		logger.Info("SQLite schema initialized successfully")
 	}
 	defer db.Close()
 	logger.Info("database connection established")
 
 	// Initialize HNSW index for agent discovery
 	logger.Info("initializing HNSW index")
-	hnsw := search.NewHNSWIndex(16, 200)
+	hnsw := search.NewIndex(logger)
 	logger.Info("HNSW index initialized")
 
 	// Initialize task queue
@@ -198,27 +222,227 @@ func main() {
 		logger.Info("binary store not available (S3 storage not configured)")
 	}
 
+	// Initialize Groq LLM client
+	logger.Info("initializing Groq LLM client")
+	groqAPIKey := os.Getenv("GROQ_API_KEY")
+	if groqAPIKey == "" {
+		logger.Warn("GROQ_API_KEY not set, intelligent task decomposition will fail")
+	}
+	groqClient := llm.NewGroqClient(groqAPIKey, "meta-llama/llama-4-scout-17b-16e-instruct", logger)
+	logger.Info("Groq LLM client initialized", zap.String("model", groqClient.GetModel()))
+
+	// Initialize R2 storage for WASM binaries
+	var r2Storage *storage.R2Storage
+	if accountID := os.Getenv("R2_ACCOUNT_ID"); accountID != "" {
+		logger.Info("initializing R2 storage")
+		r2Config := storage.Config{
+			AccessKeyID:     os.Getenv("R2_ACCESS_KEY_ID"),
+			SecretAccessKey: os.Getenv("R2_SECRET_ACCESS_KEY"),
+			Endpoint:        os.Getenv("R2_ENDPOINT"),
+			BucketName:      getEnv("R2_BUCKET_NAME", "zerostate-agents"),
+			Region:          "auto",
+		}
+		var err error
+		r2Storage, err = storage.NewR2Storage(r2Config)
+		if err != nil {
+			logger.Warn("failed to initialize R2 storage, will fallback to mock executor",
+				zap.Error(err),
+			)
+			r2Storage = nil
+		} else {
+			logger.Info("R2 storage initialized successfully",
+				zap.String("bucket", r2Config.BucketName),
+			)
+		}
+	} else {
+		logger.Info("R2 storage not configured (set R2_ACCOUNT_ID env var to enable)")
+	}
+
+	// Initialize WASM runner V2 for intelligent execution
+	var wasmRunnerV2 *execution.WASMRunnerV2
+	if r2Storage != nil {
+		wasmRunnerV2 = execution.NewWASMRunnerV2(logger, r2Storage, 30*time.Second, 128)
+		logger.Info("WASM runner V2 initialized with R2 backend")
+	}
+
 	// Initialize orchestrator components
 	logger.Info("initializing orchestrator components")
 
-	// Use database-backed agent selector with meta-agent auction
-	selector := orchestration.NewDatabaseAgentSelector(db, orchestration.DefaultMetaAgentConfig(), logger)
+	// ============================================================================
+	// AGENT SELECTOR: Choose between database, blockchain, or hybrid
+	// ============================================================================
+	// Environment variable controls which selector to use:
+	//   AGENT_SELECTOR=database  (default, legacy)
+	//   AGENT_SELECTOR=chain     (blockchain only, Sprint 5 Phase 4)
+	//   AGENT_SELECTOR=hybrid    (transition mode with HYBRID_MODE env var)
+	//
+	// HYBRID_MODE (when AGENT_SELECTOR=hybrid):
+	//   db_primary     (database primary, chain validation)
+	//   chain_primary  (chain primary, database fallback)
+	//   chain_only     (chain only, database deleted)
+	// ============================================================================
 
-	// Use real WASM executor if S3 is configured, otherwise use mock
+	var selector orchestration.AgentSelector
+
+	selectorType := os.Getenv("AGENT_SELECTOR")
+	if selectorType == "" {
+		selectorType = "database" // Default to database for backwards compatibility
+	}
+
+	switch selectorType {
+	case "chain":
+		// Sprint 5 Phase 4: Blockchain-only agent discovery
+		logger.Info("🔗 Using BLOCKCHAIN agent selector (Sprint 5 Phase 4)")
+
+		substrateEndpoint := os.Getenv("SUBSTRATE_ENDPOINT")
+		if substrateEndpoint == "" {
+			substrateEndpoint = "ws://127.0.0.1:9944" // Default local node
+		}
+
+		substrateClient, err := substrate.NewClient(substrateEndpoint)
+		if err != nil {
+			logger.Fatal("failed to connect to substrate blockchain",
+				zap.String("endpoint", substrateEndpoint),
+				zap.Error(err),
+			)
+		}
+		defer substrateClient.Close()
+
+		selector = orchestration.NewChainAgentSelector(substrateClient, hnsw, orchestration.DefaultMetaAgentConfig(), logger)
+		logger.Info("✅ ChainAgentSelector initialized",
+			zap.String("substrate_endpoint", substrateEndpoint),
+		)
+
+	case "hybrid":
+		// Transition mode: Database + Blockchain
+		logger.Info("🔄 Using HYBRID agent selector (migration mode)")
+
+		// Initialize both selectors
+		dbSelector := orchestration.NewDatabaseAgentSelector(db, hnsw, orchestration.DefaultMetaAgentConfig(), logger)
+
+		substrateEndpoint := os.Getenv("SUBSTRATE_ENDPOINT")
+		if substrateEndpoint == "" {
+			substrateEndpoint = "ws://127.0.0.1:9944"
+		}
+
+		substrateClient, err := substrate.NewClient(substrateEndpoint)
+		if err != nil {
+			logger.Warn("failed to connect to substrate, using database only",
+				zap.Error(err),
+			)
+			selector = dbSelector
+			break
+		}
+		defer substrateClient.Close()
+
+		chainSelector := orchestration.NewChainAgentSelector(substrateClient, hnsw, orchestration.DefaultMetaAgentConfig(), logger)
+
+		// Determine hybrid mode
+		hybridMode := orchestration.HybridMode(os.Getenv("HYBRID_MODE"))
+		if hybridMode == "" {
+			hybridMode = orchestration.ModeDBPrimary // Default: database primary
+		}
+
+		selector = orchestration.NewHybridAgentSelector(dbSelector, chainSelector, hybridMode, logger)
+		logger.Info("✅ HybridAgentSelector initialized",
+			zap.String("mode", string(hybridMode)),
+			zap.String("substrate_endpoint", substrateEndpoint),
+		)
+
+	case "database":
+		fallthrough
+	default:
+		// Legacy: Database-backed agent selector
+		logger.Info("💾 Using DATABASE agent selector (legacy)")
+		selector = orchestration.NewDatabaseAgentSelector(db, hnsw, orchestration.DefaultMetaAgentConfig(), logger)
+	}
+
+	logger.Info("agent selector initialized", zap.String("type", selectorType))
+
+	// Choose executor based on configuration
 	var executor orchestration.TaskExecutor
-	if binaryStore != nil {
-		// Use real WASM task executor with production components
-		executor = orchestration.NewWASMTaskExecutor(wasmRunner, binaryStore, logger)
-		logger.Info("using real WASM task executor with S3 backend")
+	var runtimeRegistry *orchestration.RuntimeRegistry
+
+	// Prefer decentralized runtime discovery unless explicitly disabled
+	presenceTopic := getEnv("P2P_PRESENCE_TOPIC", "ainur/v1/presence/global")
+	disableP2P := strings.EqualFold(strings.TrimSpace(os.Getenv("DISABLE_P2P_ARI")), "1") ||
+		strings.EqualFold(strings.TrimSpace(os.Getenv("DISABLE_P2P_ARI")), "true")
+
+	if !disableP2P {
+		p2pExecutor, err := orchestration.NewP2PARIExecutor(presenceTopic, logger, promMetrics)
+		if err != nil {
+			logger.Warn("unable to initialize P2P ARI executor",
+				zap.String("presence_topic", presenceTopic),
+				zap.Error(err),
+			)
+		} else {
+			executor = p2pExecutor
+			defer p2pExecutor.Close()
+			runtimeRegistry = p2pExecutor.RuntimeRegistry()
+
+			logger.Info("using P2P ARI executor",
+				zap.String("presence_topic", presenceTopic),
+			)
+		}
 	} else {
+		logger.Info("P2P ARI executor disabled by configuration",
+			zap.String("presence_topic", presenceTopic),
+		)
+	}
+
+	if executor == nil && os.Getenv("ARI_RUNTIME_ADDR") != "" {
+		// Check if ARI runtime is configured (Sprint 1 Phase 3)
+		ariRuntimeAddr := os.Getenv("ARI_RUNTIME_ADDR")
+		logger.Info("ARI runtime configured, using ARI-v1 protocol",
+			zap.String("runtime_address", ariRuntimeAddr),
+		)
+		ariExecutor, err := orchestration.NewARIExecutor(ariRuntimeAddr, logger)
+		if err != nil {
+			logger.Fatal("failed to create ARI executor", zap.Error(err))
+		}
+
+		// Query runtime info on startup
+		runtimeInfo, err := ariExecutor.GetRuntimeInfo(ctx)
+		if err != nil {
+			logger.Warn("failed to get runtime info, but continuing",
+				zap.Error(err),
+			)
+		} else {
+			logger.Info("✅ ARI runtime connected successfully",
+				zap.String("runtime_did", runtimeInfo.Did),
+				zap.String("runtime_name", runtimeInfo.Name),
+				zap.Strings("capabilities", runtimeInfo.Capabilities),
+			)
+		}
+
+		executor = ariExecutor
+		defer ariExecutor.Close()
+	} else if groqAPIKey != "" && r2Storage != nil && wasmRunnerV2 != nil {
+		// Use intelligent task executor with Groq LLM + WASM agents
+		executor = orchestration.NewIntelligentTaskExecutor(groqClient, wasmRunnerV2, r2Storage, logger)
+		logger.Info("🧠 using intelligent task executor with Groq LLM + R2 WASM agents")
+	} else if binaryStore != nil {
+		// Fallback to basic WASM executor with S3
+		executor = orchestration.NewWASMTaskExecutor(wasmRunner, binaryStore, logger)
+		logger.Info("using basic WASM task executor with S3 backend")
+	} else {
+		// Fallback to mock executor
 		executor = orchestration.NewMockTaskExecutor(logger)
-		logger.Info("using mock task executor (S3 not configured)")
+		logger.Info("using mock task executor (no storage configured)")
 	}
 
 	orchConfig := orchestration.DefaultOrchestratorConfig()
 	orchConfig.NumWorkers = *workers
 
 	orch := orchestration.NewOrchestrator(ctx, taskQueue, selector, executor, orchConfig, logger)
+
+	// Wire Auctioneer into orchestrator for market-based selection (L4 Concordat)
+	if gossip != nil {
+		auctioneer := orchestration.NewAuctioneer(gossip, logger.With(zap.String("component", "auctioneer")))
+		orch.SetAuctioneer(auctioneer)
+		logger.Info("auctioneer wired into orchestrator - market-based task selection enabled")
+	}
+
 	logger.Info("orchestrator components initialized with meta-agent")
 
 	// Start orchestrator
@@ -236,9 +460,49 @@ func main() {
 	defer wsHub.Stop()
 	logger.Info("WebSocket hub started")
 
+	// Initialize blockchain service (Sprint 2)
+	logger.Info("initializing blockchain service")
+	blockchainEndpoint := os.Getenv("BLOCKCHAIN_ENDPOINT")
+	if blockchainEndpoint == "" {
+		blockchainEndpoint = "ws://127.0.0.1:35651" // Default to local chain-v2
+	}
+	keystoreSecret := os.Getenv("BLOCKCHAIN_SECRET")
+	if keystoreSecret == "" {
+		keystoreSecret = "//Alice" // Default dev account
+	}
+	blockchain, err := substrate.NewBlockchainService(blockchainEndpoint, keystoreSecret, logger)
+	if err != nil {
+		logger.Warn("blockchain service failed to initialize - continuing without blockchain",
+			zap.Error(err),
+		)
+	} else if blockchain.IsEnabled() {
+		logger.Info("blockchain service initialized successfully")
+		defer blockchain.Close()
+	} else {
+		logger.Info("blockchain service running in disabled mode")
+	}
+
 	// Initialize API handlers
 	logger.Info("initializing API handlers")
-	handlers := api.NewHandlers(ctx, logger, p2pHost, signer, hnsw, taskQueue, orch, db, s3Storage, wsHub, wasmRunner, resultStore, binaryStore)
+	handlers := api.NewHandlers(
+		ctx,
+		logger,
+		p2pHost,
+		signer,
+		hnsw,
+		taskQueue,
+		orch,
+		db,
+		s3Storage,
+		wsHub,
+		wasmRunner,
+		resultStore,
+		binaryStore,
+		blockchain,
+		runtimeRegistry,
+		promMetrics,
+		promRegistry,
+	)
 
 	// Create API server
 	logger.Info("creating API server")

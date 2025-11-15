@@ -35,39 +35,39 @@ type Config struct {
 	TLSKeyFile  string
 
 	// Request limits
-	MaxUploadSize    int64 // Maximum WASM binary size (default: 50MB)
-	RequestTimeout   time.Duration
-	ShutdownTimeout  time.Duration
+	MaxUploadSize   int64 // Maximum WASM binary size (default: 50MB)
+	RequestTimeout  time.Duration
+	ShutdownTimeout time.Duration
 
 	// Rate limiting
 	EnableRateLimit bool
 	RateLimit       int // Requests per minute per IP
 
 	// CORS
-	EnableCORS      bool
-	AllowedOrigins  []string
+	EnableCORS     bool
+	AllowedOrigins []string
 
 	// Observability
-	EnableMetrics   bool
-	EnableTracing   bool
-	MetricsPath     string
+	EnableMetrics bool
+	EnableTracing bool
+	MetricsPath   string
 }
 
 // DefaultConfig returns a default server configuration
 func DefaultConfig() *Config {
 	return &Config{
-		Host:             "0.0.0.0",
-		Port:             8080,
-		MaxUploadSize:    50 * 1024 * 1024, // 50MB
-		RequestTimeout:   30 * time.Second,
-		ShutdownTimeout:  10 * time.Second,
-		EnableRateLimit:  true,
-		RateLimit:        100, // 100 requests per minute
-		EnableCORS:       true,
-		AllowedOrigins:   []string{"*"}, // Configure properly in production
-		EnableMetrics:    true,
-		EnableTracing:    true,
-		MetricsPath:      "/metrics",
+		Host:            "0.0.0.0",
+		Port:            8080,
+		MaxUploadSize:   50 * 1024 * 1024, // 50MB
+		RequestTimeout:  30 * time.Second,
+		ShutdownTimeout: 10 * time.Second,
+		EnableRateLimit: true,
+		RateLimit:       100, // 100 requests per minute
+		EnableCORS:      true,
+		AllowedOrigins:  []string{"*"}, // Configure properly in production
+		EnableMetrics:   true,
+		EnableTracing:   true,
+		MetricsPath:     "/metrics",
 	}
 }
 
@@ -138,13 +138,38 @@ func NewServer(config *Config, handlers *Handlers, logger *zap.Logger) *Server {
 
 // setupRoutes configures all API routes
 func (s *Server) setupRoutes() {
-	// Health check endpoints
-	s.router.GET("/health", s.handleHealth)
-	s.router.GET("/ready", s.handleReady)
+	// Health check endpoints (Enhanced in Sprint 6 Phase 3)
+	s.router.GET("/health", s.handlers.HandleBasicHealth)
+	s.router.GET("/ready", s.handlers.HandleReadiness)
+	s.router.GET("/health/detailed", s.handlers.HandleEnhancedHealth)
 
-	// Metrics endpoint
+	// Legacy health endpoint for backward compatibility
+	s.router.GET("/health/legacy", s.handleHealth)
+	s.router.GET("/ready/legacy", s.handleReady)
+
+	// Blockchain health endpoints (Sprint 3)
+	health := s.router.Group("/health")
+	{
+		health.GET("/blockchain", s.handlers.HandleHealthBlockchain)
+		health.GET("/blockchain/metrics", s.handlers.HandleHealthBlockchainMetrics)
+		health.GET("/blockchain/circuit-breaker", s.handlers.HandleHealthBlockchainCircuitBreaker)
+
+		// Enhanced health endpoints (Sprint 6 Phase 3)
+		health.GET("/metrics", s.handlers.HandleHealthMetrics)
+		health.GET("/summary", s.handlers.HandleMetricsSummary)
+	}
+
+	// Metrics endpoints (Enhanced in Sprint 6 Phase 3)
 	if s.config.EnableMetrics {
-		s.router.GET(s.config.MetricsPath, gin.WrapH(promhttp.Handler()))
+		// Primary Prometheus metrics endpoint
+		s.router.GET(s.config.MetricsPath, s.handlers.HandleMetrics())
+
+		// Additional metrics endpoints
+		s.router.GET("/metrics/summary", s.handlers.HandleMetricsSummary)
+		s.router.GET("/metrics/health", s.handlers.HandleHealthMetrics)
+
+		// Legacy endpoint for backward compatibility
+		s.router.GET("/metrics/legacy", gin.WrapH(promhttp.Handler()))
 	}
 
 	// Serve static files (Web UI)
@@ -158,6 +183,14 @@ func (s *Server) setupRoutes() {
 	// API v1 routes
 	v1 := s.router.Group("/api/v1")
 	{
+		// Runtime registry endpoints (public)
+		runtimeRegistry := v1.Group("/runtime-registry")
+		{
+			runtimeRegistry.GET("", s.handlers.ListRuntimeRegistry)
+			runtimeRegistry.GET("/health", s.handlers.GetRuntimeRegistryHealth)
+			runtimeRegistry.GET("/:did", s.handlers.GetRuntimeRegistryEntry)
+		}
+
 		// User management (public routes)
 		users := v1.Group("/users")
 		{
@@ -194,7 +227,7 @@ func (s *Server) setupRoutes() {
 				agents.GET("/search", s.handlers.SearchAgents)
 
 				// Agent WASM binary upload and management
-				agents.POST("/upload", s.handlers.UploadAgentSimple)  // Simplified upload endpoint (auto-generates ID)
+				agents.POST("/upload", s.handlers.UploadAgentSimple) // Simplified upload endpoint (auto-generates ID)
 				agents.POST("/:id/binary", s.handlers.UploadAgent)
 				agents.GET("/:id/binary", s.handlers.GetAgentBinary)
 				agents.DELETE("/:id/binary", s.handlers.DeleteAgentBinary)
@@ -300,20 +333,20 @@ func (s *Server) setupRoutes() {
 				economic.GET("/health", s.handlers.EconomicHealthCheck)
 			}
 
-		// Analytics and monitoring
-		analytics := protected.Group("/analytics")
-		{
-			analytics.GET("/escrow", s.handlers.GetEscrowMetrics)
-			analytics.GET("/auctions", s.handlers.GetAuctionMetrics)
-			analytics.GET("/payment-channels", s.handlers.GetPaymentChannelMetrics)
-			analytics.GET("/reputation", s.handlers.GetReputationMetrics)
-			analytics.GET("/delegations", s.handlers.GetDelegationMetrics)
-			analytics.GET("/disputes", s.handlers.GetDisputeMetrics)
-			analytics.GET("/economic-health", s.handlers.GetEconomicHealthMetrics)
-			analytics.GET("/time-series", s.handlers.GetTimeSeriesData)
-			analytics.GET("/anomalies", s.handlers.DetectAnomalies)
-			analytics.GET("/dashboard", s.handlers.GetAnalyticsDashboard)
-		}
+			// Analytics and monitoring
+			analytics := protected.Group("/analytics")
+			{
+				analytics.GET("/escrow", s.handlers.GetEscrowMetrics)
+				analytics.GET("/auctions", s.handlers.GetAuctionMetrics)
+				analytics.GET("/payment-channels", s.handlers.GetPaymentChannelMetrics)
+				analytics.GET("/reputation", s.handlers.GetReputationMetrics)
+				analytics.GET("/delegations", s.handlers.GetDelegationMetrics)
+				analytics.GET("/disputes", s.handlers.GetDisputeMetrics)
+				analytics.GET("/economic-health", s.handlers.GetEconomicHealthMetrics)
+				analytics.GET("/time-series", s.handlers.GetTimeSeriesData)
+				analytics.GET("/anomalies", s.handlers.DetectAnomalies)
+				analytics.GET("/dashboard", s.handlers.GetAnalyticsDashboard)
+			}
 		}
 	}
 }
@@ -394,11 +427,11 @@ func (s *Server) handleHealth(c *gin.Context) {
 	if s.handlers != nil && s.handlers.orchestrator != nil {
 		metrics := s.handlers.orchestrator.GetMetrics()
 		checks["orchestrator"] = map[string]interface{}{
-			"status":         "healthy",
-			"workers_active": metrics.ActiveWorkers,
-			"tasks_total":    metrics.TasksProcessed,
+			"status":          "healthy",
+			"workers_active":  metrics.ActiveWorkers,
+			"tasks_total":     metrics.TasksProcessed,
 			"tasks_succeeded": metrics.TasksSucceeded,
-			"tasks_failed":   metrics.TasksFailed,
+			"tasks_failed":    metrics.TasksFailed,
 		}
 	}
 
@@ -473,8 +506,8 @@ func (s *Server) handleReady(c *gin.Context) {
 			}
 		} else {
 			checks["orchestrator"] = map[string]interface{}{
-				"status":         "ready",
-				"workers_active": metrics.ActiveWorkers,
+				"status":          "ready",
+				"workers_active":  metrics.ActiveWorkers,
 				"tasks_processed": metrics.TasksProcessed,
 			}
 		}

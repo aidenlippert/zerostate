@@ -1,0 +1,59 @@
+syntax = "proto3";
+
+package ari.v1;
+
+option go_package = "github.com/aidenlippert/zerostate/reference-runtime-v1/pkg/ari/v1;ariv1";
+
+// Task service handles task execution
+service Task {
+  // Execute runs a task and returns the result (supports streaming for long-running tasks)
+  rpc Execute(TaskExecuteRequest) returns (stream TaskExecuteResponse);
+}
+
+// TaskExecuteRequest contains the task to execute
+message TaskExecuteRequest {
+  // Unique task ID
+  string task_id = 1;
+  
+  // Task input (JSON-encoded)
+  string input = 2;
+  
+  // Timeout in milliseconds (0 = use default)
+  int32 timeout_ms = 3;
+  
+  // Maximum memory in MB (0 = use default)
+  int32 max_memory_mb = 4;
+}
+
+// TaskExecuteResponse contains the execution result or progress update
+message TaskExecuteResponse {
+  // Task ID (echoed from request)
+  string task_id = 1;
+  
+  // Status of the task
+  TaskStatus status = 2;
+  
+  // Result (JSON-encoded, only present when status = COMPLETED)
+  string result = 3;
+  
+  // Error message (only present when status = FAILED)
+  string error = 4;
+  
+  // Execution time in milliseconds
+  int64 execution_ms = 5;
+  
+  // Progress update (0.0 - 1.0, optional)
+  float progress = 6;
+  
+  // Progress message (optional)
+  string progress_message = 7;
+}
+
+// TaskStatus represents the current state of a task
+enum TaskStatus {
+  TASK_STATUS_UNSPECIFIED = 0;
+  TASK_STATUS_PENDING = 1;
+  TASK_STATUS_RUNNING = 2;
+  TASK_STATUS_COMPLETED = 3;
+  TASK_STATUS_FAILED = 4;
+}
